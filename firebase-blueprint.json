@@ -1,0 +1,212 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "bannerURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "student"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "courses": {
+      "title": "Course",
+      "description": "Course information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "bannerURL": { "type": "string" },
+        "category": { 
+          "type": "string",
+          "enum": ["teclas", "cordas", "voz", "espiritual", "liderança", "entretenimento"]
+        },
+        "instructor": { "type": "string" },
+        "instructorPhoto": { "type": "string" },
+        "instructorQuote": { "type": "string" },
+        "duration": { "type": "string" },
+        "topics": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title"]
+    },
+    "masterclasses": {
+      "title": "Masterclass",
+      "description": "Masterclass information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "bannerURL": { "type": "string" },
+        "instructor": { "type": "string" },
+        "instructorPhoto": { "type": "string" },
+        "instructorQuote": { "type": "string" },
+        "duration": { "type": "string" },
+        "topics": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "slug"]
+    },
+    "entertainment": {
+      "title": "Entertainment",
+      "description": "Entertainment content information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "bannerURL": { "type": "string" },
+        "instructor": { "type": "string" },
+        "duration": { "type": "string" },
+        "topics": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "slug"]
+    },
+    "lessons": {
+      "title": "Lesson",
+      "description": "Lesson information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "duration": { "type": "string" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "title", "videoUrl"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "monthlyPrice": { "type": "number" },
+        "annualPrice": { "type": "number" }
+      }
+    },
+    "library": {
+      "title": "Library Resource",
+      "description": "Exclusive resources like sheet music, chords, voice kits, and multitracks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { 
+          "type": "string", 
+          "enum": ["partitura", "cifra", "kit-voz", "multitrack"] 
+        },
+        "fileUrl": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category", "fileUrl"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "User notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "warning", "error"] },
+        "read": { "type": "boolean" },
+        "link": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "read", "createdAt"]
+    },
+    "footer": {
+      "title": "Footer Settings",
+      "description": "Global footer information and social links",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "instagram": { "type": "string" },
+        "youtube": { "type": "string" },
+        "facebook": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "string" }
+      }
+    },
+    "subscriptions": {
+      "title": "Subscription",
+      "description": "User subscription status and history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "canceled", "past_due"] },
+        "plan": { "type": "string" },
+        "stripeCustomerId": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "status", "plan"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "users",
+      "description": "User profile document"
+    },
+    "courses/{courseId}": {
+      "schema": "courses",
+      "description": "Course document"
+    },
+    "masterclasses/{masterclassId}": {
+      "schema": "masterclasses",
+      "description": "Masterclass document"
+    },
+    "entertainment/{contentId}": {
+      "schema": "entertainment",
+      "description": "Entertainment document"
+    },
+    "lessons/{lessonId}": {
+      "schema": "lessons",
+      "description": "Lesson document"
+    },
+    "settings/{settingId}": {
+      "schema": "settings",
+      "description": "Global settings document"
+    },
+    "library/{resourceId}": {
+      "schema": "library",
+      "description": "Exclusive library resource document"
+    },
+    "notifications/{notificationId}": {
+      "schema": "notifications",
+      "description": "User notification document"
+    },
+    "subscriptions/{userId}": {
+      "schema": "subscriptions",
+      "description": "User subscription document"
+    }
+  }
+}
