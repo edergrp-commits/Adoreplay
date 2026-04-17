@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
   User
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -18,6 +18,21 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 export const storage = getStorage(app);
+
+// Test connection
+async function testConnection() {
+  try {
+    // We use getDocFromServer to force a network request
+    await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("Firestore connection test successful");
+  } catch (error) {
+    if(error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Firestore Error: The client is offline. Please check your Firebase configuration (projectId and databaseId).");
+    }
+    // Skip logging for other errors during initial test
+  }
+}
+testConnection();
 
 export const googleProvider = new GoogleAuthProvider();
 export const facebookProvider = new FacebookAuthProvider();

@@ -7,6 +7,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, collection, onSnapshot, query, where, orderBy, updateDoc } from 'firebase/firestore';
 import { useIconSettings } from '../hooks/useIconSettings';
 import DynamicIcon from './DynamicIcon';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 export default function Header() {
   const { getIcon } = useIconSettings();
@@ -106,7 +107,7 @@ export default function Header() {
           if (error.message.includes('insufficient permissions')) {
             console.warn("Permission issue in user listener - usually resolved after role is set");
           } else {
-            console.error("Error in Header user listener:", error);
+            handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
           }
         });
 
@@ -120,7 +121,7 @@ export default function Header() {
             setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           },
           (error) => {
-            console.error("Error in Header notifications listener:", error);
+            handleFirestoreError(error, OperationType.GET, 'notifications');
           }
         );
 
@@ -133,7 +134,7 @@ export default function Header() {
             type: 'Biblioteca' 
           })));
         }, (error) => {
-          console.error("Error in Header library listener:", error);
+          handleFirestoreError(error, OperationType.GET, 'library');
         });
 
         return () => {
@@ -224,8 +225,13 @@ export default function Header() {
   return (
     <nav className="fixed top-0 w-full z-[100] bg-background/80 backdrop-blur-xl flex justify-between items-center px-8 h-20 border-b border-white/5">
       <div className="flex items-center gap-12">
-        <Link to="/" className="text-2xl font-black tracking-tighter text-primary font-brand uppercase">
-          AdorePlay
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all shadow-2xl">
+            <img src="/favicon.svg" alt="AdorePlay" className="w-6 h-6 object-contain shadow-primary/20" />
+          </div>
+          <span className="text-2xl font-black tracking-tighter text-white font-brand uppercase group-hover:text-primary transition-colors">
+            AdorePlay
+          </span>
         </Link>
         <div className="hidden md:flex gap-8 items-center">
           <Link

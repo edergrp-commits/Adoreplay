@@ -21,6 +21,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { 
   Layout, 
   Plus, 
@@ -309,21 +310,21 @@ export default function AdminPanel() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
       setCourses(data);
     }, (error) => {
-      console.error("Error in AdminPanel courses listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'courses');
     });
 
     const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Masterclass));
       setMasterclasses(data);
     }, (error) => {
-      console.error("Error in AdminPanel masterclasses listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'masterclasses');
     });
 
     const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Entertainment));
       setEntertainment(data);
     }, (error) => {
-      console.error("Error in AdminPanel entertainment listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'entertainment');
     });
 
     const unsubPricing = onSnapshot(doc(db, 'settings', 'pricing'), (docSnap) => {
@@ -331,14 +332,14 @@ export default function AdminPanel() {
         setPricingForm(docSnap.data() as any);
       }
     }, (error) => {
-      console.error("Error in AdminPanel pricing listener:", error);
+      handleFirestoreError(error, OperationType.GET, 'settings/pricing');
     });
 
     const unsubComments = onSnapshot(query(collection(db, 'comments'), orderBy('createdAt', 'desc')), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Comment));
       setComments(data);
     }, (error) => {
-      console.error("Error in AdminPanel comments listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'comments');
     });
 
     const unsubFreeLesson = onSnapshot(doc(db, 'settings', 'free-lesson'), (docSnap) => {
@@ -346,7 +347,7 @@ export default function AdminPanel() {
         setFreeLessonForm(docSnap.data() as any);
       }
     }, (error) => {
-      console.error("Error in AdminPanel free-lesson listener:", error);
+      handleFirestoreError(error, OperationType.GET, 'settings/free-lesson');
     });
 
     const unsubFooter = onSnapshot(doc(db, 'settings', 'footer'), (docSnap) => {
@@ -354,7 +355,7 @@ export default function AdminPanel() {
         setFooterForm(docSnap.data() as any);
       }
     }, (error) => {
-      console.error("Error in AdminPanel footer listener:", error);
+      handleFirestoreError(error, OperationType.GET, 'settings/footer');
     });
 
     const unsubIcons = onSnapshot(doc(db, 'settings', 'icons'), (docSnap) => {
@@ -362,20 +363,20 @@ export default function AdminPanel() {
         setIconsForm(prev => ({ ...prev, ...docSnap.data() }));
       }
     }, (error) => {
-      console.error("Error in AdminPanel icons listener:", error);
+      handleFirestoreError(error, OperationType.GET, 'settings/icons');
     });
 
     const unsubLibrary = onSnapshot(query(collection(db, 'library'), orderBy('createdAt', 'desc')), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LibraryResource));
       setLibraryResources(data);
     }, (error) => {
-      console.error("Error in AdminPanel library listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'library');
     });
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
-      console.error("Error in AdminPanel users listener:", error);
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     // Clear selection when tab changes (handled by useEffect dependency or manual trigger)
@@ -801,15 +802,20 @@ export default function AdminPanel() {
         : [notificationForm.userId];
 
       for (const uid of targetUsers) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: uid,
-          title: notificationForm.title,
-          message: notificationForm.message,
-          type: notificationForm.type,
-          link: notificationForm.link,
-          read: false,
-          createdAt: serverTimestamp()
-        });
+        const path = 'notifications';
+        try {
+          await addDoc(collection(db, path), {
+            userId: uid,
+            title: notificationForm.title,
+            message: notificationForm.message,
+            type: notificationForm.type,
+            link: notificationForm.link,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.CREATE, path);
+        }
       }
 
       setNotificationForm({ userId: 'all', title: '', message: '', type: 'info', link: '' });
@@ -827,11 +833,11 @@ export default function AdminPanel() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const path = 'settings/footer';
       await setDoc(doc(db, 'settings', 'footer'), footerForm);
       alert('Rodapé atualizado com sucesso!');
     } catch (error: any) {
-      console.error("Error updating footer:", error);
-      alert(`Erro ao atualizar rodapé: ${error.message}`);
+      handleFirestoreError(error, OperationType.WRITE, 'settings/footer');
     } finally {
       setIsSaving(false);
     }
@@ -841,10 +847,11 @@ export default function AdminPanel() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const path = 'settings/icons';
       await setDoc(doc(db, 'settings', 'icons'), iconsForm);
       alert('Ícones atualizados com sucesso!');
     } catch (error: any) {
-      alert(`Erro ao salvar ícones: ${error.message}`);
+      handleFirestoreError(error, OperationType.WRITE, 'settings/icons');
     } finally {
       setIsSaving(false);
     }
@@ -883,14 +890,24 @@ export default function AdminPanel() {
       };
 
       if (editingLesson) {
-        await updateDoc(doc(db, 'lessons', editingLesson.id), dataToSave);
+        const path = `lessons/${editingLesson.id}`;
+        try {
+          await updateDoc(doc(db, 'lessons', editingLesson.id), dataToSave);
+        } catch (error) {
+          handleFirestoreError(error, OperationType.UPDATE, path);
+        }
       } else {
-        await addDoc(collection(db, 'lessons'), { 
-          ...dataToSave, 
-          courseId: selectedContent.id, 
-          contentType: activeTab,
-          createdAt: serverTimestamp() 
-        });
+        const path = 'lessons';
+        try {
+          await addDoc(collection(db, path), { 
+            ...dataToSave, 
+            courseId: selectedContent.id, 
+            contentType: activeTab,
+            createdAt: serverTimestamp() 
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.CREATE, path);
+        }
       }
       
       clearTimeout(timeout);
@@ -919,21 +936,31 @@ export default function AdminPanel() {
       }
 
       // Delete associated lessons first
-      const q = query(collection(db, 'lessons'), where('courseId', '==', id));
-      const lessonsSnap = await getDocs(q);
-      
-      for (const lessonDoc of lessonsSnap.docs) {
-        const lessonData = lessonDoc.data() as Lesson;
-        if (lessonData.resources) {
-          for (const res of lessonData.resources) {
-            if (res.url) await deleteFileFromStorage(res.url);
+      const lessonsPath = 'lessons';
+      try {
+        const q = query(collection(db, lessonsPath), where('courseId', '==', id));
+        const lessonsSnap = await getDocs(q);
+        
+        for (const lessonDoc of lessonsSnap.docs) {
+          const lessonData = lessonDoc.data() as Lesson;
+          if (lessonData.resources) {
+            for (const res of lessonData.resources) {
+              if (res.url) await deleteFileFromStorage(res.url);
+            }
           }
+          await deleteDoc(doc(db, 'lessons', lessonDoc.id));
         }
-        await deleteDoc(doc(db, 'lessons', lessonDoc.id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, lessonsPath);
       }
 
       // Delete the course
-      await deleteDoc(doc(db, 'courses', id));
+      const coursePath = `courses/${id}`;
+      try {
+        await deleteDoc(doc(db, 'courses', id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, coursePath);
+      }
       
       if (selectedContent?.id === id) {
         setSelectedContent(null);
