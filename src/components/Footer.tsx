@@ -31,8 +31,13 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
           {/* Brand Column */}
           <div className="space-y-6">
-            <Link to="/" className="text-3xl font-black tracking-tighter text-primary font-brand uppercase">
-              AdorePlay
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all">
+                <img src="/favicon.svg" alt="AdorePlay" className="w-6 h-6 object-contain" />
+              </div>
+              <span className="text-3xl font-black tracking-tighter text-white font-brand uppercase group-hover:text-primary transition-colors">
+                AdorePlay
+              </span>
             </Link>
             <p className="text-sm text-on-surface-variant leading-relaxed max-w-xs">
               {footerData.description}
