@@ -35,7 +35,7 @@ export default function Footer() {
               <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all">
                 <img src="/favicon.svg" alt="AdorePlay" className="w-6 h-6 object-contain" />
               </div>
-              <span className="text-3xl font-black tracking-tighter text-white font-brand uppercase group-hover:text-primary transition-colors">
+              <span className="text-3xl font-black tracking-tighter text-primary font-brand uppercase hover:opacity-80 transition-opacity">
                 AdorePlay
               </span>
             </Link>

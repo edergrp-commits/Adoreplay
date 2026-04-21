@@ -98,7 +98,7 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl mb-6">
             <img src="/favicon.svg" alt="AdorePlay" className="w-10 h-10 object-contain" />
           </div>
-          <h1 className="text-4xl font-headline font-extrabold tracking-tight text-white mb-2 uppercase">AdorePlay</h1>
+          <h1 className="text-4xl font-headline font-extrabold tracking-tight text-primary mb-2 uppercase">AdorePlay</h1>
           <p className="text-on-surface-variant font-headline tracking-wide text-sm">
             {isResetting ? 'Recupere seu acesso' : (isLogin ? 'Entrar' : 'Crie sua conta e comece a adorar')}
           </p>
