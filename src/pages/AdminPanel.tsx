@@ -42,7 +42,10 @@ import {
   MessageSquare,
   Bell,
   Users,
-  User as UserIcon
+  User as UserIcon,
+  Star,
+  BarChart,
+  DollarSign
 } from 'lucide-react';
 
 import DynamicIcon from '../components/DynamicIcon';
@@ -123,9 +126,24 @@ interface LibraryResource {
   createdAt: any;
 }
 
+interface RemunerationConfig {
+  subscriptionValue: number;
+  activeStudents: number;
+  platformMargin: number;
+  viewsWeight: number;
+  filmmakerFactor: number;
+}
+
+interface TeacherPerformance {
+  id: string;
+  name: string;
+  views: number;
+  minutes: number;
+}
+
 export default function AdminPanel() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<'courses' | 'masterclasses' | 'entertainment' | 'pricing' | 'comments' | 'free-lesson' | 'library' | 'notifications' | 'footer' | 'icons' | 'students'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'masterclasses' | 'entertainment' | 'pricing' | 'comments' | 'free-lesson' | 'library' | 'notifications' | 'footer' | 'icons' | 'students' | 'remuneration'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
   const [entertainment, setEntertainment] = useState<Entertainment[]>([]);
@@ -193,7 +211,23 @@ export default function AdminPanel() {
   const [uploadingLibraryFile, setUploadingLibraryFile] = useState(false);
   const [uploadingLibraryThumbnail, setUploadingLibraryThumbnail] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [remunerationConfig, setRemunerationConfig] = useState<RemunerationConfig>({
+    subscriptionValue: 49.90,
+    activeStudents: 0,
+    platformMargin: 70,
+    viewsWeight: 30,
+    filmmakerFactor: 50
+  });
+  const [teachersPerformance, setTeachersPerformance] = useState<TeacherPerformance[]>([]);
+  const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
+  const [teacherForm, setTeacherForm] = useState<Omit<TeacherPerformance, 'id'>>({
+    name: '',
+    views: 0,
+    minutes: 0
+  });
+  const [editingTeacher, setEditingTeacher] = useState<TeacherPerformance | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const instructorPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -379,6 +413,51 @@ export default function AdminPanel() {
       handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
+    const unsubRemunerationConfig = onSnapshot(doc(db, 'remuneration_config', 'current'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setRemunerationConfig({
+          subscriptionValue: data.subscriptionValue || 49.90,
+          activeStudents: data.activeStudents || 0,
+          platformMargin: data.platformMargin ?? 70,
+          viewsWeight: data.viewsWeight ?? 30,
+          filmmakerFactor: data.filmmakerFactor ?? 50
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'remuneration_config/current');
+    });
+
+    const unsubTeachersPerformance = onSnapshot(collection(db, 'teacher_performance'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeacherPerformance));
+      setTeachersPerformance(data);
+      
+      // Auto seed if empty
+      if (data.length === 0) {
+        const seedInitialTeachers = async () => {
+          const initialNames = [
+            "Piano", "Violão", "Guitarra", "Contrabaixo", "Canto", 
+            "Bateria", "Violino", "Viola", "Violoncelo", "Sax Alto", 
+            "Clarinete", "Oboé", "Trombone", "Como montar um ministério de louvor", 
+            "Liderança", "Coral Infantil", "Adoração na Bíblia", 
+            "Regência Coral", "Orquestra", "Prática de Conjunto"
+          ];
+
+          for (const name of initialNames) {
+            await addDoc(collection(db, 'teacher_performance'), {
+              name,
+              views: 0,
+              minutes: 0,
+              updatedAt: serverTimestamp()
+            });
+          }
+        };
+        seedInitialTeachers();
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'teacher_performance');
+    });
+
     // Clear selection when tab changes (handled by useEffect dependency or manual trigger)
     setSelectedContent(null);
 
@@ -394,6 +473,8 @@ export default function AdminPanel() {
       unsubLibrary();
       unsubUsers();
       unsubIcons();
+      unsubRemunerationConfig();
+      unsubTeachersPerformance();
     };
   }, [navigate]);
 
@@ -555,6 +636,26 @@ export default function AdminPanel() {
     }
   };
 
+  const ensureTeacherInRemuneration = async (instructorName: string) => {
+    if (!instructorName || instructorName.trim() === '') return;
+    
+    try {
+      const q = query(collection(db, 'teacher_performance'), where('name', '==', instructorName));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        await addDoc(collection(db, 'teacher_performance'), {
+          name: instructorName,
+          views: 0,
+          minutes: 0,
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error("Error ensuring teacher in remuneration:", error);
+    }
+  };
+
   const handleCourseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -580,6 +681,7 @@ export default function AdminPanel() {
           ...data, 
           createdAt: serverTimestamp() 
         });
+        await ensureTeacherInRemuneration(courseForm.instructor);
       }
       
       alert(editingCourse ? 'Curso atualizado!' : 'Curso cadastrado!');
@@ -612,6 +714,7 @@ export default function AdminPanel() {
         await updateDoc(doc(db, 'masterclasses', editingMasterclass.id), data);
       } else {
         await addDoc(collection(db, 'masterclasses'), { ...data, createdAt: serverTimestamp() });
+        await ensureTeacherInRemuneration(masterclassForm.instructor);
       }
       
       alert('Masterclass salva!');
@@ -643,6 +746,7 @@ export default function AdminPanel() {
         await updateDoc(doc(db, 'entertainment', editingEntertainment.id), data);
       } else {
         await addDoc(collection(db, 'entertainment'), { ...data, createdAt: serverTimestamp() });
+        await ensureTeacherInRemuneration(entertainmentForm.instructor);
       }
       
       alert('Conteúdo salvo!');
@@ -1059,6 +1163,136 @@ export default function AdminPanel() {
     }
   };
 
+  const handleRemunerationConfigSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'remuneration_config', 'current'), {
+        ...remunerationConfig,
+        updatedAt: serverTimestamp()
+      });
+      alert('Configurações salvas com sucesso!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'remuneration_config/current');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTeacherSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      if (editingTeacher) {
+        await updateDoc(doc(db, 'teacher_performance', editingTeacher.id), {
+          ...teacherForm,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'teacher_performance'), {
+          ...teacherForm,
+          updatedAt: serverTimestamp()
+        });
+      }
+      setIsTeacherModalOpen(false);
+      setEditingTeacher(null);
+      setTeacherForm({ name: '', views: 0, minutes: 0 });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'teacher_performance');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteTeacher = async (id: string, name: string) => {
+    if (teachersPerformance.length <= 1) {
+      alert('A tabela deve conter ao menos 1 professor. Não é possível remover o último registro.');
+      return;
+    }
+
+    if (!confirm(`Deseja remover ${name}? Esta ação redistribui o pool entre os professores restantes.`)) {
+      return;
+    }
+
+    if (isDeleting) return;
+    setIsDeleting(true);
+    setDeletingId(id);
+    try {
+      await deleteDoc(doc(db, 'teacher_performance', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `teacher_performance/${id}`);
+    } finally {
+      setIsDeleting(false);
+      setDeletingId(null);
+    }
+  };
+
+  // Remuneration Calculations
+  const totalRevenue = remunerationConfig.subscriptionValue * remunerationConfig.activeStudents;
+  const poolPercentage = 100 - remunerationConfig.platformMargin;
+  const availablePool = totalRevenue * (poolPercentage / 100);
+  const watchTimeWeight = 100 - remunerationConfig.viewsWeight;
+
+  const totalTeacherViews = teachersPerformance.reduce((acc, t) => acc + t.views, 0);
+  const totalTeacherMinutes = teachersPerformance.reduce((acc, t) => acc + t.minutes, 0);
+
+  const filmmakerScoreBruto = (totalTeacherViews * (remunerationConfig.viewsWeight / 100)) + (totalTeacherMinutes * (watchTimeWeight / 100));
+  const filmmakerScore = filmmakerScoreBruto * (remunerationConfig.filmmakerFactor / 100);
+
+  const teachersWithScores = teachersPerformance.map(t => {
+    const score = (t.views * (remunerationConfig.viewsWeight / 100)) + (t.minutes * (watchTimeWeight / 100));
+    return { ...t, score, isFilmmaker: false };
+  });
+
+  // Inject Filmmaker
+  const teachersAndFilmmaker = [
+    ...teachersWithScores,
+    {
+      id: 'filmmaker-id',
+      name: 'Filmmaker',
+      views: totalTeacherViews,
+      minutes: totalTeacherMinutes,
+      score: filmmakerScore,
+      isFilmmaker: true
+    }
+  ];
+
+  const totalScore = teachersAndFilmmaker.reduce((acc, t) => acc + t.score, 0);
+
+  const rankedTeachers = teachersAndFilmmaker.map(t => {
+    const share = totalScore > 0 ? (t.score / totalScore) : (teachersAndFilmmaker.length > 0 ? 1 / teachersAndFilmmaker.length : 0);
+    const remuneration = share * availablePool;
+    return { ...t, share, remuneration };
+  }).sort((a, b) => b.remuneration - a.remuneration);
+
+  const topTeacher = rankedTeachers.length > 0 ? rankedTeachers[0] : null;
+
+  const exportRemunerationReport = () => {
+    const csvRows = [
+      ['Professor/Conteudo', 'Visualizacoes', 'Minutos Assistidos', 'Score', '% do Pool', 'Remuneracao (RS)'],
+      ...rankedTeachers.map(t => [
+        `"${t.name}"`,
+        t.views.toString(),
+        t.minutes.toString(),
+        t.score.toFixed(2),
+        (t.share * 100).toFixed(2) + '%',
+        `"${t.remuneration.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}"`
+      ])
+    ];
+
+    const csvContent = csvRows.map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio_remuneracao_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const deleteLesson = async (id: string) => {
     if (isDeleting) return;
     setIsDeleting(true);
@@ -1177,8 +1411,14 @@ export default function AdminPanel() {
               >
                 Ícones
               </button>
+              <button 
+                onClick={() => setActiveTab('remuneration')}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'remuneration' ? 'bg-primary text-white shadow-lg' : 'text-on-surface-variant hover:text-white'}`}
+              >
+                Remuneração
+              </button>
             </div>
-            {activeTab !== 'pricing' && activeTab !== 'comments' && activeTab !== 'free-lesson' && activeTab !== 'notifications' && activeTab !== 'footer' && activeTab !== 'icons' && activeTab !== 'students' && (
+            {activeTab !== 'pricing' && activeTab !== 'comments' && activeTab !== 'free-lesson' && activeTab !== 'notifications' && activeTab !== 'footer' && activeTab !== 'icons' && activeTab !== 'students' && activeTab !== 'remuneration' && (
               <button 
                 onClick={() => {
                   if (activeTab === 'courses') {
@@ -1204,6 +1444,19 @@ export default function AdminPanel() {
               >
                 <Plus size={20} />
                 Novo {activeTab === 'courses' ? 'Curso' : activeTab === 'masterclasses' ? 'Masterclass' : activeTab === 'library' ? 'Recurso' : 'Conteúdo'}
+              </button>
+            )}
+            {activeTab === 'remuneration' && (
+              <button 
+                onClick={() => {
+                  setEditingTeacher(null);
+                  setTeacherForm({ name: '', views: 0, minutes: 0 });
+                  setIsTeacherModalOpen(true);
+                }}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-primary/20"
+              >
+                <Plus size={20} />
+                Adicionar Professor
               </button>
             )}
           </div>
@@ -1750,6 +2003,270 @@ export default function AdminPanel() {
                     {isSaving ? 'Enviando...' : 'Enviar Notificação'}
                   </button>
                 </form>
+              </div>
+            </div>
+          ) : activeTab === 'remuneration' ? (
+            <div className="lg:col-span-12 space-y-8">
+              {/* Config Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Platform Config */}
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                  <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <Layout size={16} className="text-primary" />
+                    1. Configuração da Plataforma
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Valor da Assinatura (R$)</label>
+                      <input 
+                        type="number"
+                        value={remunerationConfig.subscriptionValue}
+                        onChange={(e) => setRemunerationConfig({...remunerationConfig, subscriptionValue: Number(e.target.value)})}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Alunos Ativos</label>
+                      <input 
+                        type="number"
+                        value={remunerationConfig.activeStudents}
+                        onChange={(e) => setRemunerationConfig({...remunerationConfig, activeStudents: Number(e.target.value)})}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Margem da Plataforma (%)</label>
+                      <input 
+                        type="number"
+                        value={remunerationConfig.platformMargin}
+                        min="0"
+                        max="100"
+                        onChange={(e) => setRemunerationConfig({...remunerationConfig, platformMargin: Number(e.target.value)})}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Fator do Filmmaker (%)</label>
+                        <span className="text-[10px] font-black text-primary">{remunerationConfig.filmmakerFactor}%</span>
+                      </div>
+                      <input 
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="1"
+                        value={remunerationConfig.filmmakerFactor}
+                        onChange={(e) => setRemunerationConfig({...remunerationConfig, filmmakerFactor: Number(e.target.value)})}
+                        className="w-full accent-primary bg-white/10 rounded-lg h-2"
+                      />
+                      <p className="text-[9px] text-white/40 leading-relaxed mt-1">
+                        Com fator de {remunerationConfig.filmmakerFactor}%, o Filmmaker compete com {remunerationConfig.filmmakerFactor}% da soma total de engajamento da plataforma.
+                      </p>
+                    </div>
+                    <div className="pt-4 border-t border-white/5 space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/40 font-bold uppercase">Receita Total:</span>
+                        <span className="text-white font-black">{totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/40 font-bold uppercase">Pool Disponível ({poolPercentage}%):</span>
+                        <span className="text-primary font-black">{availablePool.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weights Config */}
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                  <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <Zap size={16} className="text-primary" />
+                    2. Pesos das Métricas
+                  </h3>
+                  <div className="space-y-8">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Peso Visualizações: {remunerationConfig.viewsWeight}%</label>
+                      </div>
+                      <input 
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={remunerationConfig.viewsWeight}
+                        onChange={(e) => setRemunerationConfig({...remunerationConfig, viewsWeight: Number(e.target.value)})}
+                        className="w-full accent-primary bg-white/10 rounded-lg h-2"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Peso Tempo Assistido: {watchTimeWeight}%</label>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-lg h-2 overflow-hidden">
+                        <div className="h-full bg-primary/30" style={{ width: `${watchTimeWeight}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-white/5">
+                       <button 
+                         onClick={handleRemunerationConfigSave}
+                         disabled={isSaving}
+                         className="w-full py-4 bg-primary text-white rounded-xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-3"
+                       >
+                         {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                         Salvar Configurações
+                       </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Highlights */}
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                  <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <Star size={16} className="text-primary" />
+                    Destaque do Mês
+                  </h3>
+                  {topTeacher && topTeacher.score > 0 ? (
+                    <div className="space-y-6">
+                      <div className="p-6 bg-primary/10 border border-primary/20 rounded-2xl text-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 tracking-widest to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative z-10">
+                          <div className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2">Líder do Ranking</div>
+                          <div className="text-2xl font-black text-white uppercase tracking-tighter truncate">{topTeacher.name}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[8px] font-bold text-white/30 uppercase tracking-widest mb-1">Impacto</div>
+                          <div className="text-xl font-black text-white">{(topTeacher.share * 100).toFixed(1)}%</div>
+                        </div>
+                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
+                          <div className="text-[8px] font-bold text-white/30 uppercase tracking-widest mb-1">Pagamento</div>
+                          <div className="text-xl font-black text-primary truncate">{topTeacher.remuneration.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={exportRemunerationReport}
+                        className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                      >
+                        <Upload size={16} />
+                        Gerar Ranking CSV
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-white/20 text-xs font-bold uppercase tracking-widest italic gap-4 p-8 border-2 border-dashed border-white/5 rounded-2xl">
+                       <BarChart size={40} className="opacity-20" />
+                       Sem dados para o ranking
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Teachers Table */}
+              <div className="bg-surface-container-low border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+                <div className="p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                    <Users size={24} className="text-primary" />
+                    3. Gestão de Scores por Professor
+                  </h3>
+                  <div className="flex items-center gap-3 p-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                    <Star size={14} className="text-primary" />
+                    Score Total: {totalScore.toFixed(1)} pts
+                  </div>
+                </div>
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left min-w-[900px]">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-white/5">
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Professor / Categoria</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Visualizações</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Minutos Assistidos</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Score Calculado</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">% do Pool</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Remuneração Final</th>
+                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {rankedTeachers.map((t, idx) => (
+                        <tr key={t.id} className={`hover:bg-white/5 transition-colors group ${t.isFilmmaker ? 'bg-indigo-500/5' : (idx === 0 && t.score > 0 ? 'bg-primary/5' : '')}`}>
+                          <td className="px-8 py-6">
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${idx === 0 && t.score > 0 ? 'bg-primary text-white' : (t.isFilmmaker ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/10 text-white/40')}`}>
+                                {idx + 1}
+                              </span>
+                              <div className="flex flex-col">
+                                <span className={`font-bold tracking-tight ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
+                                  {t.name}
+                                </span>
+                                {t.isFilmmaker && (
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500/60 leading-none mt-1">
+                                    [Filmmaker · soma total · fator {remunerationConfig.filmmakerFactor}%]
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <span className={`font-medium ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
+                              {t.views.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <span className={`font-medium ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
+                              {t.minutes.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <span className={`font-black tracking-tighter ${t.isFilmmaker ? 'text-indigo-400' : 'text-primary'}`}>
+                              {t.score.toFixed(1)}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${t.isFilmmaker ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white/5 text-white/60'}`}>
+                              {(t.share * 100).toFixed(2)}%
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            <span className={`font-black ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
+                              {t.remuneration.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!t.isFilmmaker && (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingTeacher(t as any);
+                                      setTeacherForm({ name: t.name, views: t.views, minutes: t.minutes });
+                                      setIsTeacherModalOpen(true);
+                                    }}
+                                    className="p-3 text-on-surface-variant hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                                    title="Editar métricas"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button 
+                                    onClick={() => deleteTeacher(t.id, t.name)}
+                                    disabled={isDeleting}
+                                    className={`p-3 transition-all rounded-xl ${deletingId === t.id ? 'text-red-500 bg-red-500/20' : 'text-red-500/50 hover:text-red-500 hover:bg-red-500/10'}`}
+                                    title="Remover"
+                                  >
+                                    {deletingId === t.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                  </button>
+                                </>
+                              )}
+                              {t.isFilmmaker && (
+                                <div className="px-3 py-2 bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest rounded-lg border border-indigo-500/20">
+                                  Automático
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : (
@@ -2668,6 +3185,87 @@ export default function AdminPanel() {
                   Excluir
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Teacher Modal */}
+      <AnimatePresence>
+        {isTeacherModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTeacherModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm bg-surface-container-high rounded-3xl p-8 shadow-2xl border border-white/10"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">
+                  {editingTeacher ? 'Editar Dados' : 'Novo Conteúdo'}
+                </h3>
+                <button 
+                  onClick={() => setIsTeacherModalOpen(false)}
+                  className="p-2 rounded-full bg-white/5 text-white/40 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleTeacherSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nome do Professor / Conteúdo</label>
+                  <input 
+                    type="text"
+                    required
+                    value={teacherForm.name}
+                    onChange={(e) => setTeacherForm({...teacherForm, name: e.target.value})}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Views</label>
+                    <input 
+                      type="number"
+                      required
+                      min="0"
+                      value={teacherForm.views}
+                      onChange={(e) => setTeacherForm({...teacherForm, views: Number(e.target.value)})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Minutos</label>
+                    <input 
+                      type="number"
+                      required
+                      min="0"
+                      value={teacherForm.minutes}
+                      onChange={(e) => setTeacherForm({...teacherForm, minutes: Number(e.target.value)})}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="w-full py-4 bg-primary text-white rounded-xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-3"
+                  >
+                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                    {isSaving ? 'Salvando...' : 'Salvar Dados'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

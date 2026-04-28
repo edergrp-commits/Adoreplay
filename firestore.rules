@@ -82,5 +82,13 @@ service cloud.firestore {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       allow write: if false; // Only backend (Admin SDK) can write
     }
+
+    match /remuneration_config/{configId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /teacher_performance/{teacherId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

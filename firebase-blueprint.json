@@ -169,6 +169,32 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "status", "plan"]
+    },
+    "remuneration_config": {
+      "title": "Remuneration Config",
+      "description": "Global settings for teacher remuneration calculations",
+      "type": "object",
+      "properties": {
+        "subscriptionValue": { "type": "number", "description": "Monthly subscription price in R$" },
+        "activeStudents": { "type": "number", "description": "Total number of active students" },
+        "platformMargin": { "type": "number", "description": "Platform margin percentage (default 70)" },
+        "viewsWeight": { "type": "number", "description": "Weight of views in remediation score (0-100)" },
+        "filmmakerFactor": { "type": "number", "description": "Fator de participação do Filmmaker no pool (10-100)" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "teacher_performance": {
+      "title": "Teacher Performance",
+      "description": "Monthly performance metrics for a teacher or course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "views": { "type": "number" },
+        "minutes": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "views", "minutes"]
     }
   },
   "firestore": {
@@ -207,6 +233,14 @@
     "subscriptions/{userId}": {
       "schema": "subscriptions",
       "description": "User subscription document"
+    },
+    "remuneration_config/current": {
+      "schema": "remuneration_config",
+      "description": "Primary remuneration settings document"
+    },
+    "teacher_performance/{teacherId}": {
+      "schema": "teacher_performance",
+      "description": "Teacher performance data document"
     }
   }
 }
