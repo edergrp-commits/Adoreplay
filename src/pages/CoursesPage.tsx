@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Music, Mic, Guitar, Zap, Speaker, Play, Star, Clock, Users, BookOpen, Loader2, Heart, Film, GraduationCap } from 'lucide-react';
+import { Music, Mic, Guitar, Zap, Speaker, Play, Star, Clock, Users, BookOpen, Loader2, Heart, Film, GraduationCap, Wind, Drum } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
@@ -48,6 +48,24 @@ const categories = [
     color: 'from-red-500/20'
   },
   { 
+    name: 'Sopro', 
+    slug: 'sopro',
+    icon: Wind, 
+    count: 'Sax, Trompete & Flauta', 
+    instructor: 'Renato Silva',
+    image: 'https://images.unsplash.com/photo-1573871666457-7c7329118cf9?auto=format&fit=crop&q=80&w=800',
+    color: 'from-cyan-500/20'
+  },
+  { 
+    name: 'Percussão', 
+    slug: 'percussao',
+    icon: Drum, 
+    count: 'Bateria & Percussão', 
+    instructor: 'Felipe Santos',
+    image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?auto=format&fit=crop&q=80&w=800',
+    color: 'from-amber-500/20'
+  },
+  { 
     name: 'Espiritual', 
     slug: 'espiritual',
     icon: Heart, 
@@ -90,34 +108,40 @@ export default function CoursesPage() {
       if (user) {
         const unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
           if (docSnap.exists()) {
-            setIsSubscribed(docSnap.data().isSubscribed || docSnap.data().role === 'admin');
+            setIsSubscribed(docSnap.data().isSubscribed || docSnap.data().role === 'admin' || user.email === 'edergrp@gmail.com');
           }
         });
-        return () => unsubUser();
+
+        const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
+          const coursesData = snapshot.docs.map(doc => ({ id: doc.id, type: 'course', ...doc.data() } as ContentItem));
+          setDbCourses(coursesData);
+        }, (error) => {
+          console.error("Error fetching courses:", error);
+        });
+
+        const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
+          const mcData = snapshot.docs.map(doc => ({ id: doc.id, type: 'masterclass', ...doc.data() } as ContentItem));
+          setDbMasterclasses(mcData);
+        }, (error) => {
+          console.error("Error fetching masterclasses:", error);
+        });
+
+        const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
+          const entData = snapshot.docs.map(doc => ({ id: doc.id, type: 'entertainment', ...doc.data() } as ContentItem));
+          setDbEntertainment(entData);
+        }, (error) => {
+          console.error("Error fetching entertainment:", error);
+        });
+
+        return () => {
+          unsubUser();
+          unsubCourses();
+          unsubMasterclasses();
+          unsubEntertainment();
+        };
       } else {
         setIsSubscribed(false);
       }
-    });
-
-    const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
-      const coursesData = snapshot.docs.map(doc => ({ id: doc.id, type: 'course', ...doc.data() } as ContentItem));
-      setDbCourses(coursesData);
-    }, (error) => {
-      console.error("Error fetching courses:", error);
-    });
-
-    const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
-      const mcData = snapshot.docs.map(doc => ({ id: doc.id, type: 'masterclass', ...doc.data() } as ContentItem));
-      setDbMasterclasses(mcData);
-    }, (error) => {
-      console.error("Error fetching masterclasses:", error);
-    });
-
-    const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
-      const entData = snapshot.docs.map(doc => ({ id: doc.id, type: 'entertainment', ...doc.data() } as ContentItem));
-      setDbEntertainment(entData);
-    }, (error) => {
-      console.error("Error fetching entertainment:", error);
     });
 
     // Set loading to false after a short delay to allow snapshots to initialize
@@ -125,9 +149,6 @@ export default function CoursesPage() {
 
     return () => {
       unsubscribeAuth();
-      unsubCourses();
-      unsubMasterclasses();
-      unsubEntertainment();
       clearTimeout(timer);
     };
   }, []);

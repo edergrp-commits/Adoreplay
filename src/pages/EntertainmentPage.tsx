@@ -2,7 +2,8 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useIconSettings } from '../hooks/useIconSettings';
 import DynamicIcon from '../components/DynamicIcon';
 import { Mic, Users, Film, Play, Star, Clock, ArrowRight, Loader2 } from 'lucide-react';
@@ -24,15 +25,18 @@ export default function EntertainmentPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Entertainment));
-      setDbEntertainment(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching entertainment:", error);
-      setLoading(false);
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Entertainment));
+        setDbEntertainment(data);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching entertainment:", error);
+        setLoading(false);
+      });
+      return () => unsubscribe();
     });
-    return () => unsubscribe();
+    return () => unsubAuth();
   }, []);
 
   if (loading) return (

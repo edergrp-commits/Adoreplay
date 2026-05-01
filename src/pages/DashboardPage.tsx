@@ -49,33 +49,35 @@ export default function DashboardPage() {
         }
       });
 
-      return () => unsubUser();
-    });
+      const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
+        setCourses(snapshot.docs.map(doc => ({ id: doc.id, type: 'course', ...doc.data() } as ContentItem)));
+      });
 
-    const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
-      setCourses(snapshot.docs.map(doc => ({ id: doc.id, type: 'course', ...doc.data() } as ContentItem)));
-    });
+      const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
+        setMasterclasses(snapshot.docs.map(doc => ({ id: doc.id, type: 'masterclass', ...doc.data() } as ContentItem)));
+      });
 
-    const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
-      setMasterclasses(snapshot.docs.map(doc => ({ id: doc.id, type: 'masterclass', ...doc.data() } as ContentItem)));
-    });
+      const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
+        setEntertainment(snapshot.docs.map(doc => ({ id: doc.id, type: 'entertainment', ...doc.data() } as ContentItem)));
+      });
 
-    const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
-      setEntertainment(snapshot.docs.map(doc => ({ id: doc.id, type: 'entertainment', ...doc.data() } as ContentItem)));
-    });
+      const unsubLessons = onSnapshot(collection(db, 'lessons'), (snapshot) => {
+        setAllLessons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lesson)));
+      });
 
-    const unsubLessons = onSnapshot(collection(db, 'lessons'), (snapshot) => {
-      setAllLessons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lesson)));
+      return () => {
+        unsubUser();
+        unsubCourses();
+        unsubMasterclasses();
+        unsubEntertainment();
+        unsubLessons();
+      };
     });
 
     const timer = setTimeout(() => setLoading(false), 1500);
 
     return () => {
       unsubscribeAuth();
-      unsubCourses();
-      unsubMasterclasses();
-      unsubEntertainment();
-      unsubLessons();
       clearTimeout(timer);
     };
   }, [navigate]);

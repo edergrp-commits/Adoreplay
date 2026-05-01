@@ -214,6 +214,154 @@ async function startServer() {
     }
   });
 
+  // Helper for Panda API Authentication
+  const pandaFetch = async (url: string, apiKey: string, options: any = {}) => {
+    const cleanKey = apiKey.trim();
+    const baseHeaders = {
+      ...options.headers,
+      'Accept': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Node.js/PandaProxy)'
+    };
+
+    const attempts = [
+      { 'Authorization': cleanKey },                
+      { 'Authorization': `Bearer ${cleanKey}` },
+      { 'token': cleanKey },                        
+      { 'Pandas-Token': cleanKey },                 
+      { 'pandas-token': cleanKey },                 
+      { 'panda-token': cleanKey },                  
+      { 'x-api-key': cleanKey },
+      { 'x-panda-token': cleanKey },
+      { 'api-key': cleanKey },
+      { 'apikey': cleanKey }
+    ];
+
+    let lastResponse: any = null;
+    
+    for (const authHeader of attempts) {
+      try {
+        const headerName = Object.keys(authHeader)[0];
+        console.log(`[Panda Proxy] Tentando ${url} via ${headerName}`);
+        
+        const response = await fetch(url, { 
+          ...options, 
+          headers: { ...baseHeaders, ...authHeader },
+          signal: AbortSignal.timeout(15000)
+        });
+        
+        if (response.ok) {
+          console.log(`[Panda Proxy] Sucesso via ${headerName}`);
+          return response;
+        }
+        
+        const errorBody = await response.clone().text().catch(() => 'no body');
+        console.warn(`[Panda Proxy] Falha via ${headerName}: ${response.status} - ${errorBody.substring(0, 250)}`);
+        
+        lastResponse = response;
+        // Keep trying on 401/403/400
+        if (![401, 403, 400].includes(response.status)) break;
+        
+      } catch (e: any) {
+        console.error('[Panda Proxy] Erro na tentativa:', e.message);
+      }
+    }
+    
+    return lastResponse || new Response(JSON.stringify({ message: 'Erro de conexão persistente' }), { status: 502 });
+  };
+
+  // Panda Video API Proxy
+  app.post('/api/panda/test', async (req, res) => {
+    const { apiKey } = req.body;
+    if (!apiKey) return res.status(400).json({ error: 'API Key missing' });
+    
+    try {
+      // Trying to list videos as a connection test - using a cleaner URL
+      const response = await pandaFetch('https://api-v2.pandavideo.com.br/videos', apiKey);
+
+      if (response.ok) {
+        return res.json({ status: 'ok' });
+      }
+
+      // Read the body to get more info
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Panda API Test Failed after all attempts:', response.status, errorData);
+      
+      let errorMessage = 'Falha na conexão com Panda Video.';
+      if (response.status === 401) errorMessage = 'Chave de API Inválida. Verifique se copiou a chave correta no Dashboard da Panda.';
+      if (response.status === 403) errorMessage = 'Acesso Proibido. Sua chave pode não ter permissão para listar vídeos.';
+      if (response.status === 400) errorMessage = 'Requisição Inválida (Bad Request). A Panda rejeitou o formato da chamada.';
+      
+      res.status(response.status).json({ 
+        error: errorMessage,
+        details: errorData.message || errorData.error || `Status HTTP: ${response.status}`,
+        raw: errorData
+      });
+
+    } catch (error: any) {
+      console.error('Internal error testing Panda API:', error);
+      res.status(500).json({ error: 'Erro técnico interno: ' + error.message });
+    }
+  });
+
+  app.post('/api/panda/video-info', async (req, res) => {
+    const { apiKey, videoId } = req.body;
+    if (!apiKey || !videoId) return res.status(400).json({ error: 'Missing apiKey or videoId' });
+    try {
+      const response = await pandaFetch(`https://api-v2.pandavideo.com.br/videos/${videoId}`, apiKey);
+      if (response.ok) {
+        const data = await response.json();
+        res.json({ title: data.title || data.name || 'Vídeo sem título' });
+      } else {
+        res.status(response.status).json({ error: 'Vídeo não encontrado' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/panda/sync', async (req, res) => {
+    const { apiKey, teachers, startDate, endDate } = req.body;
+    if (!apiKey || !teachers || !startDate || !endDate) {
+      return res.status(400).json({ error: 'Missing required sync parameters' });
+    }
+
+    try {
+      const results = [];
+
+      for (const teacher of teachers) {
+        let totalViews = 0;
+        let totalMinutes = 0;
+
+        for (const videoId of (teacher.videoIds || [])) {
+          try {
+            const url = `https://api-v2.pandavideo.com.br/videos/${videoId}/analytics?start_date=${startDate}&end_date=${endDate}`;
+            const response = await pandaFetch(url, apiKey);
+            
+            if (response.ok) {
+              const stats = await response.json();
+              // Support multiple field names as Panda API behavior varies
+              // plays often used in V2 analytics for views
+              const views = Number(stats.plays ?? stats.views ?? 0);
+              // watch_time is often returned in seconds or sometimes named differently
+              const watchTimeRaw = Number(stats.watch_time ?? stats.watch_time_seconds ?? 0);
+              
+              totalViews += views;
+              totalMinutes += Math.round(watchTimeRaw / 60);
+              console.log(`Panda Sync [${teacher.id}]: video ${videoId} -> ${views} views, ${watchTimeRaw}s`);
+            }
+          } catch (e) {
+            console.error(`Error fetching analytics for video ${videoId}:`, e);
+          }
+        }
+        results.push({ teacherId: teacher.id, views: totalViews, minutes: totalMinutes });
+      }
+      res.json({ results });
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

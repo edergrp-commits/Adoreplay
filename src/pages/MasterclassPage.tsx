@@ -2,7 +2,8 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useIconSettings } from '../hooks/useIconSettings';
 import DynamicIcon from '../components/DynamicIcon';
 import { GraduationCap, Heart, Play, Star, Clock, Users, ArrowRight, Library, Layout, Mic, Loader2 } from 'lucide-react';
@@ -25,15 +26,18 @@ export default function MasterclassPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Masterclass));
-      setDbMasterclasses(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching masterclasses:", error);
-      setLoading(false);
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Masterclass));
+        setDbMasterclasses(data);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching masterclasses:", error);
+        setLoading(false);
+      });
+      return () => unsubscribe();
     });
-    return () => unsubscribe();
+    return () => unsubAuth();
   }, []);
 
   if (loading) return (

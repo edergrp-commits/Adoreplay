@@ -23,6 +23,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { 
+  Activity,
+  CheckCircle2,
+  AlertCircle,
+  Calendar,
+  Lock,
+  RefreshCw,
   Layout, 
   Plus, 
   Edit2, 
@@ -45,7 +51,9 @@ import {
   User as UserIcon,
   Star,
   BarChart,
-  DollarSign
+  DollarSign,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import DynamicIcon from '../components/DynamicIcon';
@@ -132,6 +140,12 @@ interface RemunerationConfig {
   platformMargin: number;
   viewsWeight: number;
   filmmakerFactor: number;
+  pandaApiKey?: string;
+  pandaPlayerHost?: string;
+  autoSync?: boolean;
+  lastSyncAt?: any;
+  syncMonth?: number;
+  syncYear?: number;
 }
 
 interface TeacherPerformance {
@@ -139,6 +153,14 @@ interface TeacherPerformance {
   name: string;
   views: number;
   minutes: number;
+  videoIds?: string[];
+}
+
+interface RankedTeacher extends TeacherPerformance {
+  score: number;
+  share: number;
+  remuneration: number;
+  isFilmmaker: boolean;
 }
 
 export default function AdminPanel() {
@@ -180,6 +202,8 @@ export default function AdminPanel() {
     espiritual: 'Heart',
     lideranca: 'Users',
     entretenimento: 'Film',
+    sopro: 'Wind',
+    percussao: 'Drum',
     ui_play: 'Play',
     ui_heart: 'Heart',
     ui_star: 'Star',
@@ -216,18 +240,26 @@ export default function AdminPanel() {
     activeStudents: 0,
     platformMargin: 70,
     viewsWeight: 30,
-    filmmakerFactor: 50
+    filmmakerFactor: 50,
+    pandaPlayerHost: 'player-vz-c715df64-44b'
   });
   const [teachersPerformance, setTeachersPerformance] = useState<TeacherPerformance[]>([]);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [teacherForm, setTeacherForm] = useState<Omit<TeacherPerformance, 'id'>>({
     name: '',
     views: 0,
-    minutes: 0
+    minutes: 0,
+    videoIds: []
   });
   const [editingTeacher, setEditingTeacher] = useState<TeacherPerformance | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showPandaKey, setShowPandaKey] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isTestingPanda, setIsTestingPanda] = useState(false);
+  const [isSyncingPanda, setIsSyncingPanda] = useState(false);
+  const [pandaTestStatus, setPandaTestStatus] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [pandaVideoIdInput, setPandaVideoIdInput] = useState('');
+  const [isFetchingVideoInfo, setIsFetchingVideoInfo] = useState(false);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const instructorPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -330,6 +362,11 @@ export default function AdminPanel() {
           setLoading(false);
         }, (error) => {
           console.error("Error in AdminPanel user listener:", error);
+          if (user.email === 'edergrp@gmail.com') {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
           setLoading(false);
         });
         return () => unsubUser();
@@ -338,6 +375,12 @@ export default function AdminPanel() {
         setLoading(false);
       }
     });
+
+    return () => unsubscribeAuth();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
 
     // Real-time content listeners
     const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
@@ -363,7 +406,13 @@ export default function AdminPanel() {
 
     const unsubPricing = onSnapshot(doc(db, 'settings', 'pricing'), (docSnap) => {
       if (docSnap.exists()) {
-        setPricingForm(docSnap.data() as any);
+        const data = docSnap.data();
+        setPricingForm(prev => ({ 
+          ...prev, 
+          ...data,
+          monthlyPrice: data.monthlyPrice ?? prev.monthlyPrice,
+          annualPrice: data.annualPrice ?? prev.annualPrice
+        }));
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/pricing');
@@ -378,7 +427,8 @@ export default function AdminPanel() {
 
     const unsubFreeLesson = onSnapshot(doc(db, 'settings', 'free-lesson'), (docSnap) => {
       if (docSnap.exists()) {
-        setFreeLessonForm(docSnap.data() as any);
+        const data = docSnap.data();
+        setFreeLessonForm(prev => ({ ...prev, ...data }));
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/free-lesson');
@@ -386,7 +436,8 @@ export default function AdminPanel() {
 
     const unsubFooter = onSnapshot(doc(db, 'settings', 'footer'), (docSnap) => {
       if (docSnap.exists()) {
-        setFooterForm(docSnap.data() as any);
+        const data = docSnap.data();
+        setFooterForm(prev => ({ ...prev, ...data }));
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/footer');
@@ -421,8 +472,37 @@ export default function AdminPanel() {
           activeStudents: data.activeStudents || 0,
           platformMargin: data.platformMargin ?? 70,
           viewsWeight: data.viewsWeight ?? 30,
-          filmmakerFactor: data.filmmakerFactor ?? 50
+          filmmakerFactor: data.filmmakerFactor ?? 50,
+          pandaApiKey: data.pandaApiKey || '',
+          pandaPlayerHost: data.pandaPlayerHost || 'player-vz-c715df64-44b',
+          autoSync: data.autoSync || false,
+          lastSyncAt: data.lastSyncAt,
+          syncMonth: data.syncMonth || new Date().getMonth() + 1,
+          syncYear: data.syncYear || new Date().getFullYear()
         });
+      } else {
+        // Seed initial config
+        const seedConfig = async () => {
+          try {
+            await setDoc(doc(db, 'remuneration_config', 'current'), {
+              subscriptionValue: 49.90,
+              activeStudents: 0,
+              platformMargin: 70,
+              viewsWeight: 30,
+              filmmakerFactor: 50,
+              pandaApiKey: '',
+              pandaPlayerHost: 'player-vz-c715df64-44b',
+              autoSync: false,
+              syncMonth: new Date().getMonth() + 1,
+              syncYear: new Date().getFullYear(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          } catch (error) {
+            console.error("Error seeding remuneration config:", error);
+          }
+        };
+        seedConfig();
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'remuneration_config/current');
@@ -431,38 +511,11 @@ export default function AdminPanel() {
     const unsubTeachersPerformance = onSnapshot(collection(db, 'teacher_performance'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeacherPerformance));
       setTeachersPerformance(data);
-      
-      // Auto seed if empty
-      if (data.length === 0) {
-        const seedInitialTeachers = async () => {
-          const initialNames = [
-            "Piano", "Violão", "Guitarra", "Contrabaixo", "Canto", 
-            "Bateria", "Violino", "Viola", "Violoncelo", "Sax Alto", 
-            "Clarinete", "Oboé", "Trombone", "Como montar um ministério de louvor", 
-            "Liderança", "Coral Infantil", "Adoração na Bíblia", 
-            "Regência Coral", "Orquestra", "Prática de Conjunto"
-          ];
-
-          for (const name of initialNames) {
-            await addDoc(collection(db, 'teacher_performance'), {
-              name,
-              views: 0,
-              minutes: 0,
-              updatedAt: serverTimestamp()
-            });
-          }
-        };
-        seedInitialTeachers();
-      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'teacher_performance');
     });
 
-    // Clear selection when tab changes (handled by useEffect dependency or manual trigger)
-    setSelectedContent(null);
-
     return () => {
-      unsubscribeAuth();
       unsubCourses();
       unsubMasterclasses();
       unsubEntertainment();
@@ -470,13 +523,13 @@ export default function AdminPanel() {
       unsubComments();
       unsubFreeLesson();
       unsubFooter();
+      unsubIcons();
       unsubLibrary();
       unsubUsers();
-      unsubIcons();
       unsubRemunerationConfig();
       unsubTeachersPerformance();
     };
-  }, [navigate]);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (selectedContent) {
@@ -787,7 +840,7 @@ export default function AdminPanel() {
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('youtube.com/embed/') || url.includes('player.vimeo.com/video/')) return url;
+    if (url.includes('youtube.com/embed/') || url.includes('player.vimeo.com/video/') || url.includes('pandavideo.com.br/embed/')) return url;
 
     // YouTube
     const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
@@ -796,6 +849,17 @@ export default function AdminPanel() {
     // Vimeo
     const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
     if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+
+    // Panda Video Full Link
+    const pandaMatch = url.match(/https?:\/\/([^\/]+)\.pandavideo\.com\.br\/embed\/\?v=([^"&?\/\s]+)/);
+    if (pandaMatch) return `https://${pandaMatch[1]}.pandavideo.com.br/embed/?v=${pandaMatch[2]}`;
+
+    // Handle raw Panda IDs (like UUIDs)
+    if (url.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/) || url.startsWith('panda-')) {
+       const id = url.startsWith('panda-') ? url.replace('panda-', '') : url;
+       const host = remunerationConfig.pandaPlayerHost || 'player-vz-c715df64-44b';
+       return `https://${host}.pandavideo.com.br/embed/?v=${id}`;
+    }
 
     return url;
   };
@@ -1180,9 +1244,203 @@ export default function AdminPanel() {
     }
   };
 
+  const handleTestPandaConnection = async () => {
+    if (!remunerationConfig.pandaApiKey) {
+      alert("Por favor, insira a API Key primeiro.");
+      return;
+    }
+    setIsTestingPanda(true);
+    setPandaTestStatus('idle');
+    try {
+      const response = await fetch('/api/panda/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: remunerationConfig.pandaApiKey })
+      });
+      if (response.ok) {
+        setPandaTestStatus('ok');
+      } else {
+        const data = await response.json();
+        alert(data.error + (data.details ? `\n\nDetalhes: ${data.details}` : "") || "Falha na conexão.");
+        setPandaTestStatus('error');
+      }
+    } catch (error) {
+      console.error("Test connection error:", error);
+      setPandaTestStatus('error');
+    } finally {
+      setIsTestingPanda(false);
+    }
+  };
+
+  const handleAddVideoToTeacher = async () => {
+    if (!pandaVideoIdInput.trim()) return;
+    if (!remunerationConfig.pandaApiKey) {
+      alert("Configure a API Key da Panda primeiro.");
+      return;
+    }
+
+    const videoId = pandaVideoIdInput.trim();
+    if ((teacherForm.videoIds || []).includes(videoId)) {
+      alert("Este vídeo já está vinculado.");
+      return;
+    }
+
+    setIsFetchingVideoInfo(true);
+    try {
+      const response = await fetch('/api/panda/video-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: remunerationConfig.pandaApiKey,
+          videoId
+        })
+      });
+
+      if (response.ok) {
+        setTeacherForm(prev => ({
+          ...prev,
+          videoIds: [...(prev.videoIds || []), videoId]
+        }));
+        setPandaVideoIdInput('');
+      } else {
+        const err = await response.json();
+        alert(err.error || "Vídeo não encontrado ou ID inválido.");
+      }
+    } catch (e) {
+      alert("Erro ao validar vídeo.");
+    } finally {
+      setIsFetchingVideoInfo(false);
+    }
+  };
+
+  const handleRemoveVideoFromTeacher = (videoId: string) => {
+    setTeacherForm(prev => ({
+      ...prev,
+      videoIds: (prev.videoIds || []).filter(id => id !== videoId)
+    }));
+  };
+
+  const handlePandaSync = async () => {
+    if (!remunerationConfig.pandaApiKey) {
+      alert("API Key necessária para sincronização.");
+      return;
+    }
+    
+    if (teachersPerformance.length === 0) {
+      alert("Nenhum professor cadastrado para sincronizar.");
+      return;
+    }
+
+    setIsSyncingPanda(true);
+    try {
+      const teachersToSync = teachersPerformance.map(t => ({
+        id: t.id,
+        videoIds: t.videoIds || []
+      }));
+      
+      const month = remunerationConfig.syncMonth || (new Date().getMonth() + 1);
+      const year = remunerationConfig.syncYear || new Date().getFullYear();
+      
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDayString = String(new Date(year, month, 0).getDate()).padStart(2, '0');
+      const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDayString}`;
+
+      const response = await fetch('/api/panda/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          apiKey: remunerationConfig.pandaApiKey,
+          teachers: teachersToSync,
+          startDate,
+          endDate
+        })
+      });
+
+      if (response.ok) {
+        const { results } = await response.json();
+        
+        // Update teachers in batch or sequentially
+        for (const res of results) {
+          await updateDoc(doc(db, 'teacher_performance', res.teacherId), {
+            views: res.views,
+            minutes: res.minutes,
+            updatedAt: serverTimestamp()
+          });
+        }
+        
+        await updateDoc(doc(db, 'remuneration_config', 'current'), {
+          lastSyncAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        alert("Métricas sincronizadas com sucesso!");
+      } else {
+        const err = await response.json();
+        alert(`Erro na sincronização: ${err.error || 'Erro inesperado'}`);
+      }
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      alert(`Erro de conexão: ${error.message}`);
+    } finally {
+      setIsSyncingPanda(false);
+    }
+  };
+
+  const handleAddVideoId = async (teacherId: string, videoId: string) => {
+    if (!videoId.trim()) return;
+    
+    // Check if video is already linked to someone
+    const alreadyLinked = teachersPerformance.some(t => t.videoIds?.includes(videoId));
+    if (alreadyLinked) {
+      alert("Este Vídeo ID já está vinculado a outro professor.");
+      return;
+    }
+
+    const teacher = teachersPerformance.find(t => t.id === teacherId);
+    if (!teacher) return;
+
+    const currentVideos = teacher.videoIds || [];
+    if (currentVideos.includes(videoId)) {
+      alert("Este vídeo já está vinculado a este professor.");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'teacher_performance', teacherId), {
+        videoIds: [...currentVideos, videoId],
+        updatedAt: serverTimestamp()
+      });
+      setPandaVideoIdInput('');
+    } catch (error) {
+      console.error("Error adding video ID:", error);
+      alert("Erro ao vincular vídeo.");
+    }
+  };
+
+  const handleRemoveVideoId = async (teacherId: string, videoId: string) => {
+    const teacher = teachersPerformance.find(t => t.id === teacherId);
+    if (!teacher) return;
+
+    const currentVideos = teacher.videoIds || [];
+    try {
+      await updateDoc(doc(db, 'teacher_performance', teacherId), {
+        videoIds: currentVideos.filter(id => id !== videoId),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error removing video ID:", error);
+    }
+  };
+
   const handleTeacherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
+
+    if (editingTeacher && editingTeacher.videoIds && editingTeacher.videoIds.length > 0 && remunerationConfig.pandaApiKey) {
+      const confirmEdit = window.confirm("Este professor está vinculado ao Panda Video. O novo valor manual será sobrescrito na próxima sincronização. Continuar?");
+      if (!confirmEdit) return;
+    }
+
     setIsSaving(true);
     try {
       if (editingTeacher) {
@@ -1261,7 +1519,7 @@ export default function AdminPanel() {
 
   const totalScore = teachersAndFilmmaker.reduce((acc, t) => acc + t.score, 0);
 
-  const rankedTeachers = teachersAndFilmmaker.map(t => {
+  const rankedTeachers: RankedTeacher[] = teachersAndFilmmaker.map(t => {
     const share = totalScore > 0 ? (t.score / totalScore) : (teachersAndFilmmaker.length > 0 ? 1 / teachersAndFilmmaker.length : 0);
     const remuneration = share * availablePool;
     return { ...t, share, remuneration };
@@ -1334,8 +1592,8 @@ export default function AdminPanel() {
             </div>
             <h1 className="text-4xl font-black text-white tracking-tighter">Gerenciar Conteúdo</h1>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex bg-surface-container-low p-1 rounded-xl border border-white/5">
+          <div className="flex flex-col lg:flex-row items-center gap-4 w-full lg:w-auto">
+            <div className="flex flex-wrap items-center justify-center bg-surface-container-low p-1.5 rounded-2xl border border-white/5 gap-1.5 w-full lg:w-auto">
               <button 
                 onClick={() => {
                   setActiveTab('courses');
@@ -1477,7 +1735,7 @@ export default function AdminPanel() {
                       <input 
                         type="number"
                         step="0.01"
-                        value={pricingForm.monthlyPrice}
+                        value={pricingForm.monthlyPrice ?? 0}
                         onChange={(e) => setPricingForm({...pricingForm, monthlyPrice: parseFloat(e.target.value)})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-2xl font-black text-white focus:border-primary outline-none transition-all"
                       />
@@ -1487,7 +1745,7 @@ export default function AdminPanel() {
                       <input 
                         type="number"
                         step="0.01"
-                        value={pricingForm.annualPrice}
+                        value={pricingForm.annualPrice ?? 0}
                         onChange={(e) => setPricingForm({...pricingForm, annualPrice: parseFloat(e.target.value)})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-2xl font-black text-white focus:border-primary outline-none transition-all"
                       />
@@ -1553,7 +1811,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Título da Página</label>
                     <input 
                       type="text"
-                      value={freeLessonForm.title}
+                      value={freeLessonForm.title || ''}
                       onChange={(e) => setFreeLessonForm({...freeLessonForm, title: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     />
@@ -1563,7 +1821,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Descrição</label>
                     <textarea 
                       rows={3}
-                      value={freeLessonForm.description}
+                      value={freeLessonForm.description || ''}
                       onChange={(e) => setFreeLessonForm({...freeLessonForm, description: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
                     />
@@ -1574,7 +1832,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Link do Vídeo (YouTube ou Vimeo)</label>
                       <input 
                         type="text"
-                        value={freeLessonForm.videoUrl}
+                        value={freeLessonForm.videoUrl || ''}
                         onChange={(e) => setFreeLessonForm({...freeLessonForm, videoUrl: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         placeholder="Cole o link do vídeo aqui..."
@@ -1586,7 +1844,7 @@ export default function AdminPanel() {
                       </label>
                       <input 
                         type="text"
-                        value={freeLessonForm.thumbnail}
+                        value={freeLessonForm.thumbnail || ''}
                         onChange={(e) => setFreeLessonForm({...freeLessonForm, thumbnail: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1676,9 +1934,9 @@ export default function AdminPanel() {
                           onClick={() => {
                             setEditingLibrary(resource);
                             setLibraryForm({
-                              title: resource.title,
-                              category: resource.category,
-                              fileUrl: resource.fileUrl,
+                              title: resource.title || '',
+                              category: resource.category || 'partitura',
+                              fileUrl: resource.fileUrl || '',
                               thumbnail: resource.thumbnail || '',
                               description: resource.description || ''
                             });
@@ -1727,7 +1985,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Descrição da Marca</label>
                     <textarea 
                       rows={3}
-                      value={footerForm.description}
+                      value={footerForm.description || ''}
                       onChange={(e) => setFooterForm({...footerForm, description: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
                     />
@@ -1738,7 +1996,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Instagram (URL)</label>
                       <input 
                         type="text"
-                        value={footerForm.instagram}
+                        value={footerForm.instagram || ''}
                         onChange={(e) => setFooterForm({...footerForm, instagram: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1747,7 +2005,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">YouTube (URL)</label>
                       <input 
                         type="text"
-                        value={footerForm.youtube}
+                        value={footerForm.youtube || ''}
                         onChange={(e) => setFooterForm({...footerForm, youtube: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1756,7 +2014,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Facebook (URL)</label>
                       <input 
                         type="text"
-                        value={footerForm.facebook}
+                        value={footerForm.facebook || ''}
                         onChange={(e) => setFooterForm({...footerForm, facebook: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1768,7 +2026,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">E-mail de Contato</label>
                       <input 
                         type="email"
-                        value={footerForm.email}
+                        value={footerForm.email || ''}
                         onChange={(e) => setFooterForm({...footerForm, email: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1777,7 +2035,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Telefone</label>
                       <input 
                         type="text"
-                        value={footerForm.phone}
+                        value={footerForm.phone || ''}
                         onChange={(e) => setFooterForm({...footerForm, phone: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       />
@@ -1788,7 +2046,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Localização</label>
                     <input 
                       type="text"
-                      value={footerForm.location}
+                      value={footerForm.location || ''}
                       onChange={(e) => setFooterForm({...footerForm, location: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     />
@@ -1824,7 +2082,7 @@ export default function AdminPanel() {
                         </div>
                         <input 
                           type="text"
-                          value={value}
+                          value={value || ''}
                           onChange={(e) => setIconsForm({ ...iconsForm, [key]: e.target.value })}
                           className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none transition-all"
                           placeholder="Nome do ícone (Lucide)"
@@ -1934,7 +2192,7 @@ export default function AdminPanel() {
                     <div className="space-y-2">
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Para quem?</label>
                       <select 
-                        value={notificationForm.userId}
+                        value={notificationForm.userId || 'all'}
                         onChange={(e) => setNotificationForm({...notificationForm, userId: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       >
@@ -1949,7 +2207,7 @@ export default function AdminPanel() {
                     <div className="space-y-2">
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Tipo de Alerta</label>
                       <select 
-                        value={notificationForm.type}
+                        value={notificationForm.type || 'info'}
                         onChange={(e) => setNotificationForm({...notificationForm, type: e.target.value as any})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       >
@@ -1965,7 +2223,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Título da Notificação</label>
                     <input 
                       type="text"
-                      value={notificationForm.title}
+                      value={notificationForm.title || ''}
                       onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
                       placeholder="Ex: Novo curso disponível!"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
@@ -1976,7 +2234,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Mensagem</label>
                     <textarea 
                       rows={4}
-                      value={notificationForm.message}
+                      value={notificationForm.message || ''}
                       onChange={(e) => setNotificationForm({...notificationForm, message: e.target.value})}
                       placeholder="Descreva o que o usuário precisa saber..."
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
@@ -1987,7 +2245,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Link de Destino (Opcional)</label>
                     <input 
                       type="text"
-                      value={notificationForm.link}
+                      value={notificationForm.link || ''}
                       onChange={(e) => setNotificationForm({...notificationForm, link: e.target.value})}
                       placeholder="Ex: /courses/piano-iniciante"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
@@ -2007,69 +2265,269 @@ export default function AdminPanel() {
             </div>
           ) : activeTab === 'remuneration' ? (
             <div className="lg:col-span-12 space-y-8">
-              {/* Config Cards */}
+              {/* Panda Integration Card */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-8 bg-surface-container-low border border-white/5 rounded-3xl shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                  <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-8 flex items-center gap-3 relative z-10">
+                    <div className="p-2 bg-indigo-500/10 rounded-lg">
+                      <Video size={18} className="text-indigo-400" />
+                    </div>
+                    Integração Panda Video
+                  </h3>
+                  <div className="space-y-6 relative z-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">API Key (Token de Acesso)</label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input 
+                              type={showPandaKey ? "text" : "password"}
+                              value={remunerationConfig.pandaApiKey || ''}
+                              onChange={(e) => setRemunerationConfig({...remunerationConfig, pandaApiKey: e.target.value})}
+                              placeholder="••••••••••••••••"
+                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none text-sm transition-all"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                              <button 
+                                type="button"
+                                onClick={() => setShowPandaKey(!showPandaKey)}
+                                className="text-white/20 hover:text-white transition-colors"
+                              >
+                                {showPandaKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
+                              {remunerationConfig.pandaApiKey && (
+                                <button 
+                                  type="button"
+                                  onClick={() => setRemunerationConfig({...remunerationConfig, pandaApiKey: ''})}
+                                  className="text-white/20 hover:text-white transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <button 
+                            onClick={handleTestPandaConnection}
+                            disabled={isTestingPanda}
+                            className={`px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border shadow-lg ${
+                              pandaTestStatus === 'ok' ? 'bg-green-500/10 text-green-500 border-green-500/20 shadow-green-500/5' : 
+                              pandaTestStatus === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20 shadow-red-500/5' : 
+                              'bg-indigo-500 text-white border-indigo-400/20 hover:scale-105 active:scale-95 shadow-indigo-500/20'
+                            }`}
+                          >
+                            {isTestingPanda ? <Loader2 size={14} className="animate-spin" /> : 
+                             pandaTestStatus === 'ok' ? <CheckCircle2 size={14} /> : 
+                             pandaTestStatus === 'error' ? <AlertCircle size={14} /> : <Zap size={14} />
+                            }
+                            {pandaTestStatus === 'ok' ? 'OK' : 'Testar'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Domínio do Player (Opcional)</label>
+                        <input 
+                          type="text"
+                          value={remunerationConfig.pandaPlayerHost || ''}
+                          onChange={(e) => setRemunerationConfig({...remunerationConfig, pandaPlayerHost: e.target.value})}
+                          placeholder="player-vz-xxxx-xxx"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none text-sm transition-all"
+                        />
+                        <p className="text-[9px] text-white/20 font-bold uppercase tracking-tighter mt-1 ml-1">
+                          Ex: player-vz-c715df64-44b
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-white/5">
+                      <button 
+                        onClick={handleRemunerationConfigSave}
+                        disabled={isSaving}
+                        className="w-full py-4 bg-primary hover:bg-primary/80 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3 group"
+                      >
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} className="group-hover:scale-110 transition-transform" />}
+                        {isSaving ? 'Salvando...' : 'Salvar Todas as Configurações'}
+                      </button>
+                      <p className="text-center text-[9px] text-white/40 mt-3 font-bold uppercase tracking-widest animate-pulse">
+                        ⚠️ Clique acima para não perder a API Key inserida
+                      </p>
+                    </div>
+                      
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-white/5">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/30 uppercase tracking-widest ml-1">Mês de Referência</label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <select 
+                              value={remunerationConfig.syncMonth || (new Date().getMonth() + 1)}
+                              onChange={(e) => setRemunerationConfig({...remunerationConfig, syncMonth: Number(e.target.value)})}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none text-sm appearance-none cursor-pointer"
+                            >
+                              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                <option key={m} value={m} className="bg-[#1C1C1E]">{new Date(2000, m - 1).toLocaleString('pt-BR', { month: 'long' })}</option>
+                              ))}
+                            </select>
+                            <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
+                          </div>
+                          <select 
+                            value={remunerationConfig.syncYear || new Date().getFullYear()}
+                            onChange={(e) => setRemunerationConfig({...remunerationConfig, syncYear: Number(e.target.value)})}
+                            className="w-24 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-indigo-500 outline-none text-sm appearance-none cursor-pointer"
+                          >
+                            {[2024, 2025, 2026].map(y => (
+                              <option key={y} value={y} className="bg-[#1C1C1E]">{y}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row md:items-center justify-between p-6 bg-white/5 border border-white/5 rounded-3xl gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-4 rounded-2xl shadow-xl transition-all ${remunerationConfig.autoSync ? 'bg-primary/20 text-primary scale-110' : 'bg-white/5 text-white/20'}`}>
+                          <RefreshCw size={24} className={remunerationConfig.autoSync ? 'animate-spin-slow' : ''} />
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-white uppercase tracking-tight mb-1 flex items-center gap-2">
+                            Sincronização 24h
+                            {remunerationConfig.autoSync && <span className="px-2 py-0.5 bg-primary/20 text-primary text-[8px] rounded-full">ATIVO</span>}
+                          </div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                            {remunerationConfig.lastSyncAt ? `Última: ${remunerationConfig.lastSyncAt instanceof Date ? remunerationConfig.lastSyncAt.toLocaleString('pt-BR') : remunerationConfig.lastSyncAt?.toDate().toLocaleString('pt-BR')}` : 'Aguardando primeira sincronização'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                         <label className="relative inline-flex items-center cursor-pointer group/toggle">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={remunerationConfig.autoSync}
+                            onChange={(e) => setRemunerationConfig({...remunerationConfig, autoSync: e.target.checked})}
+                          />
+                          <div className="w-14 h-7 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-[21px] after:w-[21px] after:transition-all peer-checked:bg-primary border border-white/5"></div>
+                        </label>
+                        <button 
+                          onClick={handlePandaSync}
+                          disabled={isSyncingPanda || !remunerationConfig.pandaApiKey}
+                          className="px-8 py-3 bg-indigo-500 text-white rounded-xl font-black uppercase tracking-[0.1em] text-xs hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-30 disabled:hover:scale-100 flex items-center gap-3"
+                        >
+                          {isSyncingPanda ? <Loader2 size={16} className="animate-spin" /> : <Activity size={16} />}
+                          Sincronizar Agora
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Info / Status */}
+                <div className="bg-surface-container-low border border-white/5 rounded-3xl p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group">
+                   <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
+                      <BarChart size={120} />
+                   </div>
+                   <div className="space-y-6 relative z-10">
+                     <div className="flex items-start gap-4">
+                       <div className="p-3 bg-indigo-500/10 rounded-2xl">
+                          <Star className="text-indigo-400" size={24} />
+                       </div>
+                       <div>
+                          <h4 className="text-base font-black text-white uppercase tracking-tight mb-2">Monitor de Automação</h4>
+                          <p className="text-xs text-white/50 leading-relaxed font-medium">
+                            Conecte o Panda Video para automatizar a coleta de engajamento. Vincule os Video IDs aos professores na tabela abaixo para habilitar o preenchimento automático de visualizações e tempo assistido.
+                          </p>
+                       </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                        <div className="p-6 bg-white/5 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all cursor-default">
+                          <div className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-3">Links Ativos</div>
+                          <div className="flex items-end gap-2">
+                             <div className="text-4xl font-black text-white leading-none">
+                               {teachersPerformance.reduce((acc, t) => acc + (t.videoIds?.length || 0), 0)}
+                             </div>
+                             <div className="text-[10px] font-bold text-indigo-400 uppercase pb-1">Vídeos</div>
+                          </div>
+                        </div>
+                        <div className="p-6 bg-white/5 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all cursor-default">
+                          <div className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-3">Modo de Coleta</div>
+                          <div className="flex items-center gap-3">
+                             <div className={`w-3 h-3 rounded-full ${remunerationConfig.pandaApiKey ? 'bg-green-500 shadow-lg shadow-green-500/40 animate-pulse' : 'bg-yellow-500 shadow-lg shadow-yellow-500/40'}`}></div>
+                             <div className="text-lg font-black text-white uppercase tracking-tighter">
+                                {remunerationConfig.pandaApiKey ? 'Automático' : 'Manual'}
+                             </div>
+                          </div>
+                        </div>
+                     </div>
+                   </div>
+
+                   <div className="mt-8 flex items-center justify-between p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck size={18} className="text-indigo-400" />
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Segurança: API Key via Proxy SSL</span>
+                      </div>
+                      <a href="#" className="text-[9px] font-black text-white/30 hover:text-white uppercase tracking-widest underline decoration-indigo-500/30 underline-offset-4 transition-all">Doc. Panda API</a>
+                   </div>
+                </div>
+              </div>
+
+              {/* Config Cards Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Platform Config */}
-                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl transition-all hover:border-white/10">
                   <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Layout size={16} className="text-primary" />
-                    1. Configuração da Plataforma
+                    1. Finanças da Plataforma
                   </h3>
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Valor da Assinatura (R$)</label>
                       <input 
                         type="number"
-                        value={remunerationConfig.subscriptionValue}
+                        step="0.01"
+                        value={remunerationConfig.subscriptionValue ?? 0}
                         onChange={(e) => setRemunerationConfig({...remunerationConfig, subscriptionValue: Number(e.target.value)})}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Alunos Ativos</label>
+                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Volume de Alunos Pagantes</label>
                       <input 
                         type="number"
-                        value={remunerationConfig.activeStudents}
+                        value={remunerationConfig.activeStudents ?? 0}
                         onChange={(e) => setRemunerationConfig({...remunerationConfig, activeStudents: Number(e.target.value)})}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Margem da Plataforma (%)</label>
+                      <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Custo Logístico/Imposto (%)</label>
                       <input 
                         type="number"
-                        value={remunerationConfig.platformMargin}
+                        value={remunerationConfig.platformMargin ?? 0}
                         min="0"
                         max="100"
                         onChange={(e) => setRemunerationConfig({...remunerationConfig, platformMargin: Number(e.target.value)})}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-primary outline-none text-sm"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Fator do Filmmaker (%)</label>
-                        <span className="text-[10px] font-black text-primary">{remunerationConfig.filmmakerFactor}%</span>
-                      </div>
-                      <input 
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="1"
-                        value={remunerationConfig.filmmakerFactor}
-                        onChange={(e) => setRemunerationConfig({...remunerationConfig, filmmakerFactor: Number(e.target.value)})}
-                        className="w-full accent-primary bg-white/10 rounded-lg h-2"
-                      />
-                      <p className="text-[9px] text-white/40 leading-relaxed mt-1">
-                        Com fator de {remunerationConfig.filmmakerFactor}%, o Filmmaker compete com {remunerationConfig.filmmakerFactor}% da soma total de engajamento da plataforma.
-                      </p>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Fator Filmmaker (%)</label>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-primary">{remunerationConfig.filmmakerFactor || 50}%</span>
                     </div>
+                    <input 
+                      type="range"
+                      min="10"
+                      max="100"
+                      step="1"
+                      value={remunerationConfig.filmmakerFactor ?? 50}
+                      onChange={(e) => setRemunerationConfig({...remunerationConfig, filmmakerFactor: Number(e.target.value)})}
+                      className="w-full accent-primary bg-white/10 rounded-lg h-2"
+                    />
+                  </div>
                     <div className="pt-4 border-t border-white/5 space-y-2">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-white/40 font-bold uppercase">Receita Total:</span>
-                        <span className="text-white font-black">{totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-white/40 font-bold uppercase">Pool Disponível ({poolPercentage}%):</span>
+                        <span className="text-white/40 font-bold uppercase">Pool Disponível:</span>
                         <span className="text-primary font-black">{availablePool.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                       </div>
                     </div>
@@ -2077,28 +2535,28 @@ export default function AdminPanel() {
                 </div>
 
                 {/* Weights Config */}
-                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl transition-all hover:border-white/10">
                   <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Zap size={16} className="text-primary" />
-                    2. Pesos das Métricas
+                    2. Critérios de Performance
                   </h3>
                   <div className="space-y-8">
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Peso Visualizações: {remunerationConfig.viewsWeight}%</label>
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Audiência: {remunerationConfig.viewsWeight}%</label>
                       </div>
                       <input 
                         type="range"
                         min="0"
                         max="100"
-                        value={remunerationConfig.viewsWeight}
+                        value={remunerationConfig.viewsWeight ?? 30}
                         onChange={(e) => setRemunerationConfig({...remunerationConfig, viewsWeight: Number(e.target.value)})}
                         className="w-full accent-primary bg-white/10 rounded-lg h-2"
                       />
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Peso Tempo Assistido: {watchTimeWeight}%</label>
+                        <label className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Retenção (Min): {watchTimeWeight}%</label>
                       </div>
                       <div className="w-full bg-white/10 rounded-lg h-2 overflow-hidden">
                         <div className="h-full bg-primary/30" style={{ width: `${watchTimeWeight}%` }}></div>
@@ -2112,26 +2570,23 @@ export default function AdminPanel() {
                          className="w-full py-4 bg-primary text-white rounded-xl font-black uppercase tracking-widest text-xs hover:scale-[1.02] transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-3"
                        >
                          {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                         Salvar Configurações
+                         Salvar e Atualizar
                        </button>
                     </div>
                   </div>
                 </div>
 
                 {/* Highlights */}
-                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl">
+                <div className="p-6 bg-surface-container-low border border-white/5 rounded-3xl h-full shadow-2xl transition-all hover:border-white/10 relative overflow-hidden">
                   <h3 className="text-sm font-black text-white/40 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Star size={16} className="text-primary" />
-                    Destaque do Mês
+                    Ranking de Liderança
                   </h3>
                   {topTeacher && topTeacher.score > 0 ? (
                     <div className="space-y-6">
                       <div className="p-6 bg-primary/10 border border-primary/20 rounded-2xl text-center relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 tracking-widest to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative z-10">
-                          <div className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2">Líder do Ranking</div>
-                          <div className="text-2xl font-black text-white uppercase tracking-tighter truncate">{topTeacher.name}</div>
-                        </div>
+                        <div className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2">Primeira Posição</div>
+                        <div className="text-2xl font-black text-white uppercase tracking-tighter truncate">{topTeacher.name}</div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
@@ -2139,8 +2594,8 @@ export default function AdminPanel() {
                           <div className="text-xl font-black text-white">{(topTeacher.share * 100).toFixed(1)}%</div>
                         </div>
                         <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-center">
-                          <div className="text-[8px] font-bold text-white/30 uppercase tracking-widest mb-1">Pagamento</div>
-                          <div className="text-xl font-black text-primary truncate">{topTeacher.remuneration.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                          <div className="text-[8px] font-bold text-white/30 uppercase tracking-widest mb-1">Final (R$)</div>
+                          <div className="text-xl font-black text-primary truncate">{(topTeacher.remuneration).toFixed(0)}</div>
                         </div>
                       </div>
                       <button 
@@ -2148,99 +2603,152 @@ export default function AdminPanel() {
                         className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-all flex items-center justify-center gap-3"
                       >
                         <Upload size={16} />
-                        Gerar Ranking CSV
+                        Relatório CSV
                       </button>
                     </div>
                   ) : (
                     <div className="h-full flex flex-col items-center justify-center text-white/20 text-xs font-bold uppercase tracking-widest italic gap-4 p-8 border-2 border-dashed border-white/5 rounded-2xl">
                        <BarChart size={40} className="opacity-20" />
-                       Sem dados para o ranking
+                       Aguardando dados...
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Teachers Table */}
-              <div className="bg-surface-container-low border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
-                <div className="p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                    <Users size={24} className="text-primary" />
-                    3. Gestão de Scores por Professor
+              <div className="bg-surface-container-low border border-white/5 rounded-3xl overflow-hidden shadow-2xl border-l border-t border-white/[0.03]">
+                <div className="p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-surface-container-low to-white/[0.02]">
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-4">
+                    <div className="p-2 bg-primary/10 rounded-xl">
+                      <Users size={24} className="text-primary" />
+                    </div>
+                    Pool de Professores
                   </h3>
-                  <div className="flex items-center gap-3 p-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                    <Star size={14} className="text-primary" />
-                    Score Total: {totalScore.toFixed(1)} pts
+                  <div className="flex items-center gap-4">
+                    {remunerationConfig.pandaApiKey && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full">
+                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                         <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Integração Panda Ativa</span>
+                      </div>
+                    )}
+                    <button 
+                        onClick={() => {
+                          setEditingTeacher(null);
+                          setTeacherForm({ name: '', views: 0, minutes: 0 });
+                          setIsTeacherModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-primary/20"
+                      >
+                        <Plus size={16} />
+                        Adicionar Professor
+                      </button>
                   </div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left min-w-[900px]">
+                  <table className="w-full text-left min-w-[1000px]">
                     <thead>
                       <tr className="border-b border-white/5 bg-white/5">
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Professor / Categoria</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Visualizações</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Minutos Assistidos</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Score Calculado</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">% do Pool</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Remuneração Final</th>
-                        <th className="px-8 py-5 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Ações</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Pilar / Expert</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Audiência (Views)</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Retenção (Minutos)</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Score</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-center">Share %</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Repasse Final</th>
+                        <th className="px-8 py-6 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {rankedTeachers.map((t, idx) => (
-                        <tr key={t.id} className={`hover:bg-white/5 transition-colors group ${t.isFilmmaker ? 'bg-indigo-500/5' : (idx === 0 && t.score > 0 ? 'bg-primary/5' : '')}`}>
+                        <tr key={t.id} className={`hover:bg-white/5 transition-all group ${t.isFilmmaker ? 'bg-indigo-500/[0.03]' : (idx === 0 && t.score > 0 ? 'bg-primary/[0.03]' : '')}`}>
                           <td className="px-8 py-6">
-                            <div className="flex items-center gap-3">
-                              <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${idx === 0 && t.score > 0 ? 'bg-primary text-white' : (t.isFilmmaker ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/10 text-white/40')}`}>
+                            <div className="flex items-center gap-4">
+                              <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black ${idx === 0 && t.score > 0 ? 'bg-primary text-white ring-4 ring-primary/20' : (t.isFilmmaker ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/10 text-white/40')}`}>
                                 {idx + 1}
                               </span>
                               <div className="flex flex-col">
-                                <span className={`font-bold tracking-tight ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
+                                <span className={`font-black tracking-tight text-base ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
                                   {t.name}
                                 </span>
-                                {t.isFilmmaker && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500/60 leading-none mt-1">
-                                    [Filmmaker · soma total · fator {remunerationConfig.filmmakerFactor}%]
+                                {t.isFilmmaker ? (
+                                  <span className="text-[9px] font-black uppercase tracking-[0.1em] text-indigo-500/60 leading-none mt-1">
+                                    [Filmmaker · fator {remunerationConfig.filmmakerFactor}%]
                                   </span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {remunerationConfig.pandaApiKey && (
+                                      <>
+                                        {(t.videoIds || []).map(vid => (
+                                          <span key={vid} className="group/vid flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 text-indigo-400 text-[8px] font-black rounded-lg border border-indigo-500/20 shadow-sm">
+                                            <Video size={8} />
+                                            {vid}
+                                            <button 
+                                              onClick={() => handleRemoveVideoId(t.id, vid)}
+                                              className="ml-1 text-indigo-400/40 hover:text-red-500 transition-colors"
+                                              title="Remover vínculo"
+                                            >
+                                              <X size={10} />
+                                            </button>
+                                          </span>
+                                        ))}
+                                        <button 
+                                          onClick={() => {
+                                            const vid = prompt("Insira o ID do vídeo do Panda Video (ex: vid_abc123):");
+                                            if (vid) handleAddVideoId(t.id, vid);
+                                          }}
+                                          className="px-2 py-0.5 bg-white/5 text-white/30 hover:text-white hover:bg-white/10 hover:border-white/20 text-[8px] font-black rounded-lg border border-white/5 transition-all flex items-center gap-1.5 uppercase tracking-widest"
+                                        >
+                                          <Plus size={10} />
+                                          Vincular Vídeo
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
                           </td>
                           <td className="px-8 py-6 text-center">
-                            <span className={`font-medium ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
-                              {t.views.toLocaleString()}
-                            </span>
+                            <div className="flex items-center justify-center gap-2">
+                              {remunerationConfig.pandaApiKey && !t.isFilmmaker && <Lock size={12} className="text-white/20" />}
+                              <span className={`font-black text-lg ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
+                                {t.views.toLocaleString()}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-8 py-6 text-center">
-                            <span className={`font-medium ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
-                              {t.minutes.toLocaleString()}
-                            </span>
+                            <div className="flex items-center justify-center gap-2">
+                              {remunerationConfig.pandaApiKey && !t.isFilmmaker && <Lock size={12} className="text-white/20" />}
+                              <span className={`font-black text-lg ${t.isFilmmaker ? 'text-indigo-400/60' : 'text-on-surface-variant'}`}>
+                                {t.minutes.toLocaleString()}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-8 py-6 text-center">
-                            <span className={`font-black tracking-tighter ${t.isFilmmaker ? 'text-indigo-400' : 'text-primary'}`}>
+                            <span className={`font-black text-xl tracking-tighter ${t.isFilmmaker ? 'text-indigo-400' : 'text-primary'}`}>
                               {t.score.toFixed(1)}
                             </span>
                           </td>
                           <td className="px-8 py-6 text-center">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${t.isFilmmaker ? 'bg-indigo-500/10 text-indigo-400' : 'bg-white/5 text-white/60'}`}>
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black ${t.isFilmmaker ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-white/5 text-white/50 border border-white/5'}`}>
                               {(t.share * 100).toFixed(2)}%
                             </span>
                           </td>
                           <td className="px-8 py-6 text-right">
-                            <span className={`font-black ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
+                            <span className={`font-black text-lg ${t.isFilmmaker ? 'text-indigo-400' : 'text-white'}`}>
                               {t.remuneration.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </span>
                           </td>
                           <td className="px-8 py-6 text-right">
-                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              {!t.isFilmmaker && (
+                            <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!t.isFilmmaker ? (
                                 <>
                                   <button 
                                     onClick={() => {
-                                      setEditingTeacher(t as any);
-                                      setTeacherForm({ name: t.name, views: t.views, minutes: t.minutes });
+                                      setEditingTeacher(t as TeacherPerformance);
+                                      setTeacherForm({ name: t.name || '', views: t.views ?? 0, minutes: t.minutes ?? 0 });
                                       setIsTeacherModalOpen(true);
                                     }}
-                                    className="p-3 text-on-surface-variant hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                                    className="p-3 text-on-surface-variant hover:text-white hover:bg-white/10 rounded-2xl transition-all border border-transparent hover:border-white/5"
                                     title="Editar métricas"
                                   >
                                     <Edit2 size={16} />
@@ -2248,16 +2756,15 @@ export default function AdminPanel() {
                                   <button 
                                     onClick={() => deleteTeacher(t.id, t.name)}
                                     disabled={isDeleting}
-                                    className={`p-3 transition-all rounded-xl ${deletingId === t.id ? 'text-red-500 bg-red-500/20' : 'text-red-500/50 hover:text-red-500 hover:bg-red-500/10'}`}
+                                    className={`p-3 transition-all rounded-2xl border ${deletingId === t.id ? 'text-red-500 bg-red-500/20 border-red-500/30' : 'text-red-500/50 hover:text-red-500 hover:bg-red-500/10 border-transparent hover:border-red-500/20'}`}
                                     title="Remover"
                                   >
                                     {deletingId === t.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                                   </button>
                                 </>
-                              )}
-                              {t.isFilmmaker && (
-                                <div className="px-3 py-2 bg-indigo-500/10 text-indigo-500 text-[8px] font-black uppercase tracking-widest rounded-lg border border-indigo-500/20">
-                                  Automático
+                              ) : (
+                                <div className="px-4 py-2 bg-indigo-500/10 text-indigo-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-indigo-500/20 shadow-sm">
+                                  Expert Filmmaker
                                 </div>
                               )}
                             </div>
@@ -2311,11 +2818,11 @@ export default function AdminPanel() {
                           e.stopPropagation();
                           setEditingCourse(course);
                           setCourseForm({ 
-                            title: course.title, 
-                            description: course.description, 
-                            thumbnail: course.thumbnail, 
+                            title: course.title || '', 
+                            description: course.description || '', 
+                            thumbnail: course.thumbnail || '', 
                             bannerURL: course.bannerURL || '',
-                            category: course.category,
+                            category: course.category || 'teclas',
                             instructor: course.instructor || 'Eder Rios',
                             instructorPhoto: course.instructorPhoto || '',
                             instructorQuote: course.instructorQuote || '',
@@ -2361,10 +2868,10 @@ export default function AdminPanel() {
                         onClick={() => {
                           setEditingMasterclass(mc);
                           setMasterclassForm({
-                            slug: mc.slug,
-                            title: mc.title,
-                            description: mc.description,
-                            thumbnail: mc.thumbnail,
+                            slug: mc.slug || '',
+                            title: mc.title || '',
+                            description: mc.description || '',
+                            thumbnail: mc.thumbnail || '',
                             bannerURL: mc.bannerURL || '',
                             instructor: mc.instructor || 'Equipe AdorePlay',
                             instructorPhoto: mc.instructorPhoto || '',
@@ -2411,10 +2918,10 @@ export default function AdminPanel() {
                         onClick={() => {
                           setEditingEntertainment(item);
                           setEntertainmentForm({
-                            slug: item.slug,
-                            title: item.title,
-                            description: item.description,
-                            thumbnail: item.thumbnail,
+                            slug: item.slug || '',
+                            title: item.title || '',
+                            description: item.description || '',
+                            thumbnail: item.thumbnail || '',
                             bannerURL: item.bannerURL || '',
                             instructor: item.instructor || 'Produção AdorePlay',
                             duration: item.duration || '',
@@ -2482,11 +2989,11 @@ export default function AdminPanel() {
                           onClick={() => {
                             setEditingLesson(lesson);
                             setLessonForm({ 
-                              title: lesson.title, 
-                              description: lesson.description, 
-                              videoUrl: lesson.videoUrl, 
-                              duration: lesson.duration, 
-                              order: lesson.order,
+                              title: lesson.title || '', 
+                              description: lesson.description || '', 
+                              videoUrl: lesson.videoUrl || '', 
+                              duration: lesson.duration || '', 
+                              order: lesson.order ?? 1,
                               resources: lesson.resources || []
                             });
                             setIsLessonModalOpen(true);
@@ -2565,7 +3072,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Título</label>
                     <input 
                       type="text"
-                      value={activeTab === 'courses' ? courseForm.title : activeTab === 'masterclasses' ? masterclassForm.title : entertainmentForm.title}
+                      value={(activeTab === 'courses' ? courseForm.title : activeTab === 'masterclasses' ? masterclassForm.title : entertainmentForm.title) || ''}
                       onChange={(e) => {
                         if (activeTab === 'courses') setCourseForm({...courseForm, title: e.target.value});
                         else if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, title: e.target.value});
@@ -2581,7 +3088,7 @@ export default function AdminPanel() {
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Slug (URL)</label>
                       <input 
                         type="text"
-                        value={activeTab === 'masterclasses' ? masterclassForm.slug : entertainmentForm.slug}
+                        value={(activeTab === 'masterclasses' ? masterclassForm.slug : entertainmentForm.slug) || ''}
                         onChange={(e) => {
                           if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, slug: e.target.value});
                           else setEntertainmentForm({...entertainmentForm, slug: e.target.value});
@@ -2596,13 +3103,15 @@ export default function AdminPanel() {
                     <div className="space-y-2">
                       <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Categoria</label>
                       <select 
-                        value={courseForm.category}
+                        value={courseForm.category || 'teclas'}
                         onChange={(e) => setCourseForm({...courseForm, category: e.target.value})}
                         className="w-full bg-[#1a1c1e] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       >
                         <option value="teclas" className="bg-[#1a1c1e] text-white">Teclas</option>
                         <option value="cordas" className="bg-[#1a1c1e] text-white">Cordas</option>
                         <option value="voz" className="bg-[#1a1c1e] text-white">Voz</option>
+                        <option value="sopro" className="bg-[#1a1c1e] text-white">Sopro</option>
+                        <option value="percussão" className="bg-[#1a1c1e] text-white">Percussão</option>
                         <option value="espiritual" className="bg-[#1a1c1e] text-white">Espiritual</option>
                         <option value="liderança" className="bg-[#1a1c1e] text-white">Liderança</option>
                         <option value="entretenimento" className="bg-[#1a1c1e] text-white">Entretenimento</option>
@@ -2616,7 +3125,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Duração</label>
                     <input 
                       type="text"
-                      value={activeTab === 'courses' ? courseForm.duration : activeTab === 'masterclasses' ? masterclassForm.duration : entertainmentForm.duration}
+                      value={(activeTab === 'courses' ? courseForm.duration : activeTab === 'masterclasses' ? masterclassForm.duration : entertainmentForm.duration) || ''}
                       onChange={(e) => {
                         if (activeTab === 'courses') setCourseForm({...courseForm, duration: e.target.value});
                         else if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, duration: e.target.value});
@@ -2644,7 +3153,7 @@ export default function AdminPanel() {
                       </div>
                       <input 
                         type="text"
-                        value={activeTab === 'courses' ? courseForm.instructor : activeTab === 'masterclasses' ? masterclassForm.instructor : entertainmentForm.instructor}
+                        value={(activeTab === 'courses' ? courseForm.instructor : activeTab === 'masterclasses' ? masterclassForm.instructor : entertainmentForm.instructor) || ''}
                         onChange={(e) => {
                           if (activeTab === 'courses') setCourseForm({...courseForm, instructor: e.target.value});
                           else if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, instructor: e.target.value});
@@ -2715,7 +3224,7 @@ export default function AdminPanel() {
                   <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Descrição (Sobre)</label>
                   <textarea 
                     rows={3}
-                    value={activeTab === 'courses' ? courseForm.description : activeTab === 'masterclasses' ? masterclassForm.description : entertainmentForm.description}
+                    value={(activeTab === 'courses' ? courseForm.description : activeTab === 'masterclasses' ? masterclassForm.description : entertainmentForm.description) || ''}
                     onChange={(e) => {
                       if (activeTab === 'courses') setCourseForm({...courseForm, description: e.target.value});
                       else if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, description: e.target.value});
@@ -2732,7 +3241,7 @@ export default function AdminPanel() {
                   </label>
                   <textarea 
                     rows={4}
-                    value={activeTab === 'courses' ? courseForm.topics : activeTab === 'masterclasses' ? masterclassForm.topics : entertainmentForm.topics}
+                    value={(activeTab === 'courses' ? courseForm.topics : activeTab === 'masterclasses' ? masterclassForm.topics : entertainmentForm.topics) || ''}
                     onChange={(e) => {
                       if (activeTab === 'courses') setCourseForm({...courseForm, topics: e.target.value});
                       else if (activeTab === 'masterclasses') setMasterclassForm({...masterclassForm, topics: e.target.value});
@@ -2748,7 +3257,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Frase do Instrutor (Citação)</label>
                     <textarea 
                       rows={2}
-                      value={activeTab === 'courses' ? courseForm.instructorQuote : masterclassForm.instructorQuote}
+                      value={(activeTab === 'courses' ? courseForm.instructorQuote : masterclassForm.instructorQuote) || ''}
                       onChange={(e) => {
                         if (activeTab === 'courses') setCourseForm({...courseForm, instructorQuote: e.target.value});
                         else setMasterclassForm({...masterclassForm, instructorQuote: e.target.value});
@@ -2804,7 +3313,7 @@ export default function AdminPanel() {
                   <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Título da Aula</label>
                   <input 
                     type="text"
-                    value={lessonForm.title}
+                    value={lessonForm.title || ''}
                     onChange={(e) => setLessonForm({...lessonForm, title: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     placeholder="Ex: Introdução às Notas"
@@ -2816,7 +3325,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Duração</label>
                     <input 
                       type="text"
-                      value={lessonForm.duration}
+                      value={lessonForm.duration || ''}
                       onChange={(e) => setLessonForm({...lessonForm, duration: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       placeholder="Ex: 12:45"
@@ -2826,7 +3335,7 @@ export default function AdminPanel() {
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Ordem</label>
                     <input 
                       type="number"
-                      value={lessonForm.order}
+                      value={lessonForm.order ?? 1}
                       onChange={(e) => setLessonForm({...lessonForm, order: parseInt(e.target.value)})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     />
@@ -2836,22 +3345,25 @@ export default function AdminPanel() {
                 <div className="space-y-2">
                   <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1 flex items-center gap-2">
                     <Video size={14} className="text-primary" />
-                    Link do Vídeo (YouTube ou Vimeo)
+                    Panda Video ID ou Link (YouTube/Vimeo)
                   </label>
                   <input 
-                    type="url"
-                    value={lessonForm.videoUrl}
+                    type="text"
+                    value={lessonForm.videoUrl || ''}
                     onChange={(e) => setLessonForm({...lessonForm, videoUrl: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
-                    placeholder="Cole o link do vídeo aqui..."
+                    placeholder="Ex: panda-7f9382... ou link completo"
                   />
+                  <p className="text-[9px] text-white/20 font-bold uppercase tracking-tighter mt-1 ml-1">
+                    Para Panda Video, use apenas o ID (ex: panda-xxxxxx)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Descrição</label>
                   <textarea 
                     rows={3}
-                    value={lessonForm.description}
+                    value={lessonForm.description || ''}
                     onChange={(e) => setLessonForm({...lessonForm, description: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
                     placeholder="O que será ensinado nesta aula..."
@@ -2878,7 +3390,7 @@ export default function AdminPanel() {
                       <div className="flex-1 space-y-3">
                         <input 
                           type="text"
-                          value={resource.title}
+                          value={resource.title || ''}
                           onChange={(e) => {
                             const newResources = [...lessonForm.resources];
                             newResources[index].title = e.target.value;
@@ -2890,7 +3402,7 @@ export default function AdminPanel() {
                         <div className="flex gap-2">
                           <input 
                             type="url"
-                            value={resource.url}
+                            value={resource.url || ''}
                             onChange={(e) => {
                               const newResources = [...lessonForm.resources];
                               newResources[index].url = e.target.value;
@@ -2982,7 +3494,7 @@ export default function AdminPanel() {
                     <input 
                       type="text"
                       required
-                      value={libraryForm.title}
+                      value={libraryForm.title || ''}
                       onChange={(e) => setLibraryForm({...libraryForm, title: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       placeholder="Título do recurso"
@@ -2991,7 +3503,7 @@ export default function AdminPanel() {
                   <div className="space-y-2">
                     <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Categoria</label>
                     <select 
-                      value={libraryForm.category}
+                      value={libraryForm.category || 'partitura'}
                       onChange={(e) => setLibraryForm({...libraryForm, category: e.target.value as any})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     >
@@ -3009,7 +3521,7 @@ export default function AdminPanel() {
                     <input 
                       type="url"
                       required
-                      value={libraryForm.fileUrl}
+                      value={libraryForm.fileUrl || ''}
                       onChange={(e) => setLibraryForm({...libraryForm, fileUrl: e.target.value})}
                       className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                       placeholder="URL do arquivo ou carregue um novo"
@@ -3040,7 +3552,7 @@ export default function AdminPanel() {
                     <div className="flex-1 relative">
                       <input 
                         type="url"
-                        value={libraryForm.thumbnail}
+                        value={libraryForm.thumbnail || ''}
                         onChange={(e) => setLibraryForm({...libraryForm, thumbnail: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         placeholder="URL da imagem ou carregue uma nova"
@@ -3074,7 +3586,7 @@ export default function AdminPanel() {
                   <label className="text-xs font-black text-white/40 uppercase tracking-widest ml-1">Descrição (Opcional)</label>
                   <textarea 
                     rows={3}
-                    value={libraryForm.description}
+                    value={libraryForm.description || ''}
                     onChange={(e) => setLibraryForm({...libraryForm, description: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
                     placeholder="Breve descrição do recurso..."
@@ -3205,7 +3717,7 @@ export default function AdminPanel() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-sm bg-surface-container-high rounded-3xl p-8 shadow-2xl border border-white/10"
+              className="relative w-full max-w-lg bg-surface-container-high rounded-3xl p-8 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">
@@ -3220,12 +3732,20 @@ export default function AdminPanel() {
               </div>
 
               <form onSubmit={handleTeacherSubmit} className="space-y-6">
+                {editingTeacher && editingTeacher.videoIds && editingTeacher.videoIds.length > 0 && remunerationConfig.pandaApiKey && (
+                  <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
+                    <AlertCircle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-amber-500 uppercase leading-tight">
+                      Vínculo Ativo: Mudanças manuais serão sobrescritas na próxima sincronização automática.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Nome do Professor / Conteúdo</label>
                   <input 
                     type="text"
                     required
-                    value={teacherForm.name}
+                    value={teacherForm.name || ''}
                     onChange={(e) => setTeacherForm({...teacherForm, name: e.target.value})}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                   />
@@ -3237,7 +3757,7 @@ export default function AdminPanel() {
                       type="number"
                       required
                       min="0"
-                      value={teacherForm.views}
+                      value={teacherForm.views ?? 0}
                       onChange={(e) => setTeacherForm({...teacherForm, views: Number(e.target.value)})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     />
@@ -3248,10 +3768,71 @@ export default function AdminPanel() {
                       type="number"
                       required
                       min="0"
-                      value={teacherForm.minutes}
+                      value={teacherForm.minutes ?? 0}
                       onChange={(e) => setTeacherForm({...teacherForm, minutes: Number(e.target.value)})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                     />
+                  </div>
+                </div>
+
+                {/* Video Linking Section */}
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <Video size={12} className="text-primary" />
+                      Vincular Vídeos da Panda
+                    </label>
+                    <span className="text-[9px] font-bold text-white/20 uppercase tracking-tighter">
+                      {(teacherForm.videoIds || []).length} vídeos vinculados
+                    </span>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <input 
+                      type="text"
+                      value={pandaVideoIdInput}
+                      onChange={(e) => setPandaVideoIdInput(e.target.value)}
+                      placeholder="Cole o ID do vídeo (ex: panda-video-id)"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-primary outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddVideoToTeacher}
+                      disabled={isFetchingVideoInfo || !remunerationConfig.pandaApiKey}
+                      className="px-4 bg-primary/20 text-primary border border-primary/20 rounded-xl font-black text-[10px] uppercase hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                    >
+                      {isFetchingVideoInfo ? <Loader2 size={14} className="animate-spin" /> : 'Vincular'}
+                    </button>
+                  </div>
+                  {!remunerationConfig.pandaApiKey && (
+                    <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest ml-1">
+                      Configure a API Key da Panda para validar vídeos.
+                    </p>
+                  )}
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                    {(teacherForm.videoIds || []).map((videoId) => (
+                      <div key={videoId} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 group">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <PlayCircle size={14} className="text-primary" />
+                          </div>
+                          <code className="text-[11px] text-white/60 font-mono truncate">{videoId}</code>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => handleRemoveVideoFromTeacher(videoId)}
+                          className="p-1.5 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {(teacherForm.videoIds || []).length === 0 && (
+                      <div className="py-8 text-center bg-white/2 rounded-2xl border border-dashed border-white/5">
+                        <p className="text-[10px] font-bold text-white/10 uppercase tracking-widest">Nenhum vídeo vinculado</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 

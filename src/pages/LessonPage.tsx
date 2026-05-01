@@ -118,6 +118,16 @@ export default function LessonPage() {
     const vimeoMatch = url.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/);
     if (vimeoMatch) return { id: vimeoMatch[1], type: 'vimeo' };
 
+    // Panda Video
+    const pandaMatch = url.match(/https?:\/\/([^\/]+)\.pandavideo\.com\.br\/embed\/\?v=([^"&?\/\s]+)/);
+    if (pandaMatch) return { id: pandaMatch[2], type: 'panda', host: pandaMatch[1] };
+
+    // Raw Panda ID (UUID or panda- prefix)
+    if (url.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/) || url.startsWith('panda-')) {
+      const id = url.startsWith('panda-') ? url.replace('panda-', '') : url;
+      return { id, type: 'panda' };
+    }
+
     return null;
   };
 
@@ -162,7 +172,7 @@ export default function LessonPage() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!courseId) return;
+    if (!courseId || !userData) return;
 
     const fetchContent = async () => {
       setLoading(true);
@@ -217,7 +227,7 @@ export default function LessonPage() {
     });
 
     return () => unsubLessons();
-  }, [courseId]);
+  }, [courseId, userData]);
 
   // Effect to handle current lesson selection
   useEffect(() => {
@@ -437,7 +447,9 @@ export default function LessonPage() {
                 className="w-full h-full"
                 src={videoInfo?.type === 'youtube' 
                   ? `https://www.youtube.com/embed/${videoInfo.id}?autoplay=1&rel=0&modestbranding=1`
-                  : `https://player.vimeo.com/video/${videoInfo?.id}?autoplay=1`}
+                  : videoInfo?.type === 'vimeo'
+                  ? `https://player.vimeo.com/video/${videoInfo?.id}?autoplay=1`
+                  : `https://${videoInfo?.host || 'player-vz-c715df64-44b'}.pandavideo.com.br/embed/?v=${videoInfo?.id}&autoplay=true`}
                 title={currentLesson.title}
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

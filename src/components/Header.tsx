@@ -32,6 +32,38 @@ export default function Header() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        setIsAdmin(false);
+        setIsSubscribed(false);
+        setNotifications([]);
+        setDbLibrary([]);
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // User data listener (real-time role/subscription)
+    const unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        setIsAdmin(userData?.role === 'admin' || user.email === 'edergrp@gmail.com');
+        setIsSubscribed(userData?.isSubscribed || userData?.role === 'admin' || user.email === 'edergrp@gmail.com');
+      } else {
+        setIsAdmin(user.email === 'edergrp@gmail.com');
+        setIsSubscribed(user.email === 'edergrp@gmail.com');
+      }
+    }, (error) => {
+      if (!error.message.includes('insufficient permissions')) {
+        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      }
+    });
+
+    // Content listeners - only for authenticated users to avoid permission blips
     const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
       setDbCourses(snapshot.docs.map(doc => ({ 
         id: doc.id, 
@@ -80,77 +112,46 @@ export default function Header() {
       console.error("Error in Header lessons listener:", error);
     });
 
+    const unsubNotifications = onSnapshot(
+      query(
+        collection(db, 'notifications'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      ),
+      (snapshot) => {
+        setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      },
+      (error) => {
+        if (!error.message.includes('insufficient permissions')) {
+          handleFirestoreError(error, OperationType.GET, 'notifications');
+        }
+      }
+    );
+
+    const unsubLibrary = onSnapshot(collection(db, 'library'), (snapshot) => {
+      setDbLibrary(snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        name: doc.data().title, 
+        path: `/library`, 
+        icon: Library, 
+        type: 'Biblioteca' 
+      })));
+    }, (error) => {
+      if (!error.message.includes('insufficient permissions')) {
+        handleFirestoreError(error, OperationType.GET, 'library');
+      }
+    });
+
     return () => {
+      unsubUser();
       unsubCourses();
       unsubMasterclasses();
       unsubEntertainment();
       unsubLessons();
+      unsubNotifications();
+      unsubLibrary();
     };
-  }, []);
-
-  useEffect(() => {
-    if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        const unsubUser = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            setIsAdmin(userData?.role === 'admin' || currentUser.email === 'edergrp@gmail.com');
-            setIsSubscribed(userData?.isSubscribed || userData?.role === 'admin');
-          } else {
-            // Document might not exist yet if user just signed up
-            setIsAdmin(currentUser.email === 'edergrp@gmail.com');
-            setIsSubscribed(false);
-          }
-        }, (error) => {
-          if (error.message.includes('insufficient permissions')) {
-            console.warn("Permission issue in user listener - usually resolved after role is set");
-          } else {
-            handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
-          }
-        });
-
-        const unsubNotifications = onSnapshot(
-          query(
-            collection(db, 'notifications'),
-            where('userId', '==', currentUser.uid),
-            orderBy('createdAt', 'desc')
-          ),
-          (snapshot) => {
-            setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          },
-          (error) => {
-            handleFirestoreError(error, OperationType.GET, 'notifications');
-          }
-        );
-
-        const unsubLibrary = onSnapshot(collection(db, 'library'), (snapshot) => {
-          setDbLibrary(snapshot.docs.map(doc => ({ 
-            id: doc.id, 
-            name: doc.data().title, 
-            path: `/library`, 
-            icon: Library, 
-            type: 'Biblioteca' 
-          })));
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, 'library');
-        });
-
-        return () => {
-          unsubUser();
-          unsubNotifications();
-          unsubLibrary();
-        };
-      } else {
-        setIsAdmin(false);
-        setIsSubscribed(false);
-        setNotifications([]);
-        setDbLibrary([]);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  }, [user?.uid, getIcon]);
 
   const handleLogout = async () => {
     if (!auth) return;

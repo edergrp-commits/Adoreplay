@@ -1,10 +1,10 @@
 import { motion } from 'motion/react';
 import { FileText, Music, Mic2, Layers, Download, Search, Filter, Loader2, Lock } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 interface LibraryResource {
   id: string;
@@ -48,18 +48,20 @@ export default function LibraryPage() {
         setAuthLoading(false);
       });
 
-      return () => unsubUser();
-    });
+      const q = query(collection(db, 'library'), orderBy('title', 'asc'));
+      const unsubLibrary = onSnapshot(q, (snapshot) => {
+        setResources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LibraryResource)));
+        setLoading(false);
+      });
 
-    const q = query(collection(db, 'library'), orderBy('title', 'asc'));
-    const unsubLibrary = onSnapshot(q, (snapshot) => {
-      setResources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LibraryResource)));
-      setLoading(false);
+      return () => {
+        unsubUser();
+        unsubLibrary();
+      };
     });
 
     return () => {
       unsubscribeAuth();
-      unsubLibrary();
     };
   }, [navigate]);
 
@@ -229,6 +231,3 @@ export default function LibraryPage() {
     </div>
   );
 }
-
-import { doc, getDoc } from 'firebase/firestore';
-import { Link } from 'react-router-dom';

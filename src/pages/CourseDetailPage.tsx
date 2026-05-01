@@ -43,41 +43,48 @@ export default function CourseDetailPage() {
       if (user) {
         const unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
           if (docSnap.exists()) {
-            setIsSubscribed(docSnap.data().isSubscribed || docSnap.data().role === 'admin');
+            setIsSubscribed(docSnap.data().isSubscribed || docSnap.data().role === 'admin' || user.email === 'edergrp@gmail.com');
           }
         });
+
+        if (category) {
+          const unsubCourse = onSnapshot(doc(db, 'courses', category), (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data() as CourseData;
+              setDbCourse(data);
+            }
+            setLoading(false);
+          }, (error) => {
+            console.error("Error fetching course details:", error);
+            setLoading(false);
+          });
+
+          const q = query(collection(db, 'lessons'), where('courseId', '==', category), orderBy('order', 'asc'));
+          const unsubLessons = onSnapshot(q, (snapshot) => {
+            const lessonsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LessonData));
+            setDbLessons(lessonsData);
+          });
+
+          return () => {
+            unsubUser();
+            unsubCourse();
+            unsubLessons();
+          };
+        }
+
         return () => unsubUser();
       } else {
         setIsSubscribed(false);
+        if (!category) setLoading(false);
+        
+        // Even for non-auth, we might want to show course details if public
+        // but for now let's stick to auth-first to fix permissions
+        setLoading(false);
       }
-    });
-
-    if (!category) {
-      setLoading(false);
-      return () => unsubscribeAuth();
-    }
-
-    const unsubCourse = onSnapshot(doc(db, 'courses', category), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as CourseData;
-        setDbCourse(data);
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching course details:", error);
-      setLoading(false);
-    });
-
-    const q = query(collection(db, 'lessons'), where('courseId', '==', category), orderBy('order', 'asc'));
-    const unsubLessons = onSnapshot(q, (snapshot) => {
-      const lessonsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LessonData));
-      setDbLessons(lessonsData);
     });
 
     return () => {
       unsubscribeAuth();
-      unsubCourse();
-      unsubLessons();
     };
   }, [category]);
 

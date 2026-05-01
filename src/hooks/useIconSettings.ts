@@ -9,6 +9,8 @@ const defaultIcons: Record<string, string> = {
   espiritual: 'Heart',
   lideranca: 'Users',
   entretenimento: 'Film',
+  sopro: 'Wind',
+  percussao: 'Drum',
   ui_play: 'Play',
   ui_heart: 'Heart',
   ui_star: 'Star',

@@ -180,6 +180,11 @@
         "platformMargin": { "type": "number", "description": "Platform margin percentage (default 70)" },
         "viewsWeight": { "type": "number", "description": "Weight of views in remediation score (0-100)" },
         "filmmakerFactor": { "type": "number", "description": "Fator de participação do Filmmaker no pool (10-100)" },
+        "pandaApiKey": { "type": "string", "description": "Panda Video API Key" },
+        "autoSync": { "type": "boolean", "description": "Toggle for automatic Daily Sync" },
+        "lastSyncAt": { "type": "string", "format": "date-time" },
+        "syncMonth": { "type": "number" },
+        "syncYear": { "type": "number" },
         "updatedAt": { "type": "string", "format": "date-time" }
       }
     },
@@ -192,6 +197,7 @@
         "name": { "type": "string" },
         "views": { "type": "number" },
         "minutes": { "type": "number" },
+        "videoIds": { "type": "array", "items": { "type": "string" }, "description": "Panda Video IDs linked to this teacher" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "views", "minutes"]
