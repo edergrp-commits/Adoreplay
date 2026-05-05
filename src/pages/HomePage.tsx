@@ -49,11 +49,11 @@ export default function HomePage() {
       <div className="fixed inset-0 bg-gradient-to-b from-primary/5 via-transparent to-accent/5 pointer-events-none opacity-30"></div>
       
       {/* Cinematic Hero Header with Video Background */}
-      <section className="relative h-[90vh] min-h-[700px] w-full overflow-hidden bg-black border-b border-primary/20">
+      <section className="relative min-h-screen w-full overflow-hidden bg-black border-b border-primary/20 flex flex-col">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <iframe
             src={`https://www.youtube.com/embed/OVrGAQ4qrt0?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=OVrGAQ4qrt0&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
-            className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
+            className="absolute top-[62%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.3] grayscale-[0.2] contrast-[1.1]"
             allow="autoplay; encrypted-media"
             title="Background Video"
           ></iframe>
@@ -65,12 +65,12 @@ export default function HomePage() {
         <div className="absolute inset-0 cyber-grid-bg opacity-10 z-20"></div>
         <div className="scanline"></div>
         
-        <div className="relative h-full container mx-auto px-8 md:px-16 flex flex-col justify-center pt-20 z-30">
+        <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-52 pb-32 z-30">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="max-w-4xl space-y-8"
+            className="max-w-4xl space-y-10 md:space-y-12"
           >
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export default function HomePage() {
               <span className="text-primary font-modern font-semibold text-xs tracking-[0.3em] uppercase block mb-4 opacity-70">
                 Lançamento Exclusivo
               </span>
-              <h1 className="font-modern text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[0.9] text-white uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+              <h1 className="font-modern text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[0.95] text-white uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]">
                 Domine <br/>
                 <span className="text-primary glow-text">o Teclado</span>
               </h1>
@@ -141,7 +141,7 @@ export default function HomePage() {
       </section>
 
       {/* Content Grid */}
-      <section className="container mx-auto px-8 -mt-24 relative z-40 pb-32">
+      <section className="container mx-auto px-8 -mt-8 md:-mt-12 relative z-40 pb-32">
         {/* Explore Catalog Banner */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
@@ -162,7 +162,7 @@ export default function HomePage() {
                   <div className="h-px w-16 bg-primary shadow-[0_0_10px_rgba(24,165,179,0.5)]"></div>
                   <span className="text-primary font-modern font-bold text-[10px] uppercase tracking-[0.3em]">CATÁLOGO COMPLETO</span>
                 </div>
-                <h2 className="font-modern text-6xl md:text-8xl font-black text-white uppercase tracking-tighter leading-[0.8] mb-4 group-hover:text-primary transition-all duration-700">
+                <h2 className="font-modern text-4xl md:text-6xl lg:text-7xl font-black text-white uppercase tracking-tighter leading-[0.8] mb-4 group-hover:text-primary transition-all duration-700">
                   Próximo <br/>
                   <span className="text-white group-hover:text-primary">Nível</span>
                 </h2>
