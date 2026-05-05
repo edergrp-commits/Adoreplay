@@ -53,7 +53,7 @@ export default function HomePage() {
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <iframe
             src={`https://www.youtube.com/embed/OVrGAQ4qrt0?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=OVrGAQ4qrt0&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
-            className="absolute top-[62%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.3] grayscale-[0.2] contrast-[1.1]"
+            className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
             allow="autoplay; encrypted-media"
             title="Background Video"
           ></iframe>
@@ -65,12 +65,12 @@ export default function HomePage() {
         <div className="absolute inset-0 cyber-grid-bg opacity-10 z-20"></div>
         <div className="scanline"></div>
         
-        <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-52 pb-32 z-30">
+        <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-32 pb-32 z-30">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="max-w-4xl space-y-10 md:space-y-12"
+            className="max-w-4xl space-y-6 md:space-y-8"
           >
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
@@ -141,7 +141,7 @@ export default function HomePage() {
       </section>
 
       {/* Content Grid */}
-      <section className="container mx-auto px-8 -mt-8 md:-mt-12 relative z-40 pb-32">
+      <section className="container mx-auto px-8 -mt-16 md:-mt-20 relative z-40 pb-32">
         {/* Explore Catalog Banner */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
