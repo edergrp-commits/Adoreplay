@@ -165,7 +165,7 @@ interface RankedTeacher extends TeacherPerformance {
 
 export default function AdminPanel() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<'courses' | 'masterclasses' | 'entertainment' | 'pricing' | 'comments' | 'free-lesson' | 'library' | 'notifications' | 'footer' | 'icons' | 'students' | 'remuneration'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'masterclasses' | 'entertainment' | 'pricing' | 'comments' | 'free-lesson' | 'library' | 'notifications' | 'footer' | 'icons' | 'students' | 'remuneration' | 'home'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
   const [entertainment, setEntertainment] = useState<Entertainment[]>([]);
@@ -215,6 +215,25 @@ export default function AdminPanel() {
     ui_trending: 'TrendingUp',
     ui_subscribe: 'Star',
     ui_signal: 'Signal'
+  });
+  const [homeForm, setHomeForm] = useState({
+    heroBadge: 'CONTEÚDO PREMIUM',
+    heroTagline: 'Lançamento Exclusivo',
+    heroTitleLine1: 'Domine',
+    heroTitleHighlight: 'o Teclado',
+    heroDescription: 'A revolução do aprendizado musical para cristãos. Masterclasses exclusivas com os principais produtores e músicos do cenário nacional.',
+    heroVideoId: 'OVrGAQ4qrt0',
+    heroCtaPrimaryText: 'ASSINAR AGORA',
+    heroCtaSecondaryText: 'AULA GRÁTIS',
+    catalogTitleLine1: 'Próximo',
+    catalogTitleHighlight: 'Nível',
+    mainVideoId: 'jWPzifiJXvU',
+    features: [
+      "Conteúdo 100% organizado para evolução técnica e espiritual.",
+      "Vídeo aulas em altíssima definição para não perder nenhum detalhe.",
+      "Recomendação inteligente baseada no seu progresso musical.",
+      "Materiais em PDF, partituras e guias práticos inclusos."
+    ]
   });
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
@@ -462,6 +481,15 @@ export default function AdminPanel() {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+
+    const unsubHome = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setHomeForm(prev => ({ ...prev, ...data }));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/home');
     });
 
     const unsubRemunerationConfig = onSnapshot(doc(db, 'remuneration_config', 'current'), (docSnap) => {
@@ -1227,6 +1255,22 @@ export default function AdminPanel() {
     }
   };
 
+  const handleHomeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'home'), {
+        ...homeForm,
+        updatedAt: serverTimestamp()
+      });
+      alert('Configurações da Home atualizadas com sucesso!');
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.WRITE, 'settings/home');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleRemunerationConfigSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
@@ -1670,10 +1714,22 @@ export default function AdminPanel() {
                 Ícones
               </button>
               <button 
-                onClick={() => setActiveTab('remuneration')}
+                onClick={() => {
+                  setActiveTab('remuneration');
+                  setSelectedContent(null);
+                }}
                 className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'remuneration' ? 'bg-primary text-white shadow-lg' : 'text-on-surface-variant hover:text-white'}`}
               >
                 Remuneração
+              </button>
+              <button 
+                onClick={() => {
+                  setActiveTab('home');
+                  setSelectedContent(null);
+                }}
+                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'home' ? 'bg-primary text-white shadow-lg' : 'text-on-surface-variant hover:text-white'}`}
+              >
+                Editor Home
               </button>
             </div>
             {activeTab !== 'pricing' && activeTab !== 'comments' && activeTab !== 'free-lesson' && activeTab !== 'notifications' && activeTab !== 'footer' && activeTab !== 'icons' && activeTab !== 'students' && activeTab !== 'remuneration' && (
@@ -2259,6 +2315,153 @@ export default function AdminPanel() {
                   >
                     {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Bell size={20} />}
                     {isSaving ? 'Enviando...' : 'Enviar Notificação'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : activeTab === 'home' ? (
+            <div className="lg:col-span-12">
+              <div className="max-w-4xl mx-auto p-8 bg-surface-container-low border border-white/5 rounded-3xl">
+                <h2 className="text-2xl font-black text-white mb-8 flex items-center gap-3 uppercase tracking-tight">
+                  <Layout className="text-primary" />
+                  Editor da Página Inicial
+                </h2>
+                <form onSubmit={handleHomeSubmit} className="space-y-10">
+                  {/* Hero Section */}
+                  <div className="space-y-6">
+                    <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] border-l-2 border-primary pl-4">Seção Hero (Topo)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Badge de Conteúdo</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroBadge}
+                          onChange={(e) => setHomeForm({...homeForm, heroBadge: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tagline Curta</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroTagline}
+                          onChange={(e) => setHomeForm({...homeForm, heroTagline: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Título (Linha 1)</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroTitleLine1}
+                          onChange={(e) => setHomeForm({...homeForm, heroTitleLine1: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Destaque do Título</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroTitleHighlight}
+                          onChange={(e) => setHomeForm({...homeForm, heroTitleHighlight: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-primary focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Descrição Hero</label>
+                      <textarea 
+                        rows={3}
+                        value={homeForm.heroDescription}
+                        onChange={(e) => setHomeForm({...homeForm, heroDescription: e.target.value})}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">YouTube Video ID (Fundo)</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroVideoId}
+                          onChange={(e) => setHomeForm({...homeForm, heroVideoId: e.target.value})}
+                          placeholder="EX: OVrGAQ4qrt0"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Middle Section */}
+                  <div className="space-y-6 pt-6 border-t border-white/5">
+                    <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] border-l-2 border-primary pl-4">Seção de Catálogo (Banner)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Banner Título (Linha 1)</label>
+                        <input 
+                          type="text"
+                          value={homeForm.catalogTitleLine1}
+                          onChange={(e) => setHomeForm({...homeForm, catalogTitleLine1: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Banner Destaque</label>
+                        <input 
+                          type="text"
+                          value={homeForm.catalogTitleHighlight}
+                          onChange={(e) => setHomeForm({...homeForm, catalogTitleHighlight: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Video & Features */}
+                  <div className="space-y-6 pt-6 border-t border-white/5">
+                    <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] border-l-2 border-primary pl-4">Vídeo de Demonstração e Diferenciais</h3>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">YouTube Video ID (Demonstração)</label>
+                      <input 
+                        type="text"
+                        value={homeForm.mainVideoId}
+                        onChange={(e) => setHomeForm({...homeForm, mainVideoId: e.target.value})}
+                        placeholder="EX: jWPzifiJXvU"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                      />
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Diferenciais (4 itens)</label>
+                      {homeForm.features.map((feature, idx) => (
+                        <div key={idx} className="flex gap-4">
+                          <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary font-black text-xs border border-primary/20">{idx + 1}</span>
+                          <input 
+                            type="text"
+                            value={feature}
+                            onChange={(e) => {
+                              const newFeatures = [...homeForm.features];
+                              newFeatures[idx] = e.target.value;
+                              setHomeForm({...homeForm, features: newFeatures});
+                            }}
+                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="w-full py-6 bg-primary text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-[1.02] transition-all shadow-xl shadow-primary/30 flex items-center justify-center gap-3"
+                  >
+                    {isSaving ? <Loader2 className="animate-spin" size={24} /> : <Save size={24} />}
+                    {isSaving ? 'Salvando Alterações...' : 'SALVAR TODAS AS ALTERAÇÕES DA HOME'}
                   </button>
                 </form>
               </div>

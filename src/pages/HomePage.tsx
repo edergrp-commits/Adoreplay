@@ -1,9 +1,11 @@
 import { motion } from 'motion/react';
 import { Play, Star, Plus, Clock, Signal, Music, Volume2, VolumeX, Users, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useIconSettings } from '../hooks/useIconSettings';
 import DynamicIcon from '../components/DynamicIcon';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 function AccessItem({ item, index }: { item: { title: string, description: string }, index: number }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,6 +44,34 @@ export default function HomePage() {
   const { getIcon } = useIconSettings();
   const [isMuted, setIsMuted] = useState(true);
   const navigate = useNavigate();
+  const [homeSettings, setHomeSettings] = useState({
+    heroBadge: 'CONTEÚDO PREMIUM',
+    heroTagline: 'Lançamento Exclusivo',
+    heroTitleLine1: 'Domine',
+    heroTitleHighlight: 'o Teclado',
+    heroDescription: 'A revolução do aprendizado musical para cristãos. Masterclasses exclusivas com os principais produtores e músicos do cenário nacional.',
+    heroVideoId: 'OVrGAQ4qrt0',
+    heroCtaPrimaryText: 'ASSINAR AGORA',
+    heroCtaSecondaryText: 'AULA GRÁTIS',
+    catalogTitleLine1: 'Próximo',
+    catalogTitleHighlight: 'Nível',
+    mainVideoId: 'jWPzifiJXvU',
+    features: [
+      "Conteúdo 100% organizado para evolução técnica e espiritual.",
+      "Vídeo aulas em altíssima definição para não perder nenhum detalhe.",
+      "Recomendação inteligente baseada no seu progresso musical.",
+      "Materiais em PDF, partituras e guias práticos inclusos."
+    ]
+  });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
+      if (docSnap.exists()) {
+        setHomeSettings(prev => ({ ...prev, ...docSnap.data() }));
+      }
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="min-h-screen relative glitch-static">
@@ -49,10 +79,10 @@ export default function HomePage() {
       <div className="fixed inset-0 bg-gradient-to-b from-primary/5 via-transparent to-accent/5 pointer-events-none opacity-30"></div>
       
       {/* Cinematic Hero Header with Video Background */}
-      <section className="relative min-h-screen w-full overflow-hidden bg-black border-b border-primary/20 flex flex-col">
+      <section className="relative min-h-[85vh] lg:min-h-screen w-full overflow-hidden bg-black border-b border-primary/20 flex flex-col">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <iframe
-            src={`https://www.youtube.com/embed/OVrGAQ4qrt0?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=OVrGAQ4qrt0&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
+            src={`https://www.youtube.com/embed/${homeSettings.heroVideoId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${homeSettings.heroVideoId}&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
             className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
             allow="autoplay; encrypted-media"
             title="Background Video"
@@ -65,7 +95,7 @@ export default function HomePage() {
         <div className="absolute inset-0 cyber-grid-bg opacity-10 z-20"></div>
         <div className="scanline"></div>
         
-        <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-32 pb-32 z-30">
+        <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-24 md:pt-32 pb-24 md:pb-32 z-30">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
@@ -75,7 +105,7 @@ export default function HomePage() {
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
                 <span className="bg-primary/10 text-primary px-5 py-2 rounded-full text-[10px] font-modern font-bold tracking-[0.2em] uppercase border border-primary/20 backdrop-blur-md shadow-[0_0_20px_rgba(24,165,179,0.1)]">
-                  CONTEÚDO PREMIUM
+                  {homeSettings.heroBadge}
                 </span>
               </div>
               
@@ -89,17 +119,17 @@ export default function HomePage() {
             
             <div className="space-y-4">
               <span className="text-primary font-modern font-semibold text-xs tracking-[0.3em] uppercase block mb-4 opacity-70">
-                Lançamento Exclusivo
+                {homeSettings.heroTagline}
               </span>
               <h1 className="font-modern text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[0.95] text-white uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                Domine <br/>
-                <span className="text-primary glow-text">o Teclado</span>
+                {homeSettings.heroTitleLine1} <br/>
+                <span className="text-primary glow-text">{homeSettings.heroTitleHighlight}</span>
               </h1>
               <div className="w-16 h-1 bg-primary mt-6 shadow-[0_0_15px_rgba(24,165,179,0.5)]"></div>
             </div>
 
             <p className="text-on-surface-variant text-base md:text-xl font-light max-w-2xl leading-relaxed font-modern tracking-wide border-l border-white/5 pl-8">
-              A revolução do aprendizado musical para cristãos. Masterclasses exclusivas com os principais produtores e músicos do cenário nacional.
+              {homeSettings.heroDescription}
             </p>
             
             <div className="flex flex-wrap items-center gap-10 text-on-surface-variant font-modern text-[9px] font-semibold uppercase tracking-[0.2em]">
@@ -118,12 +148,12 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-primary/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="bg-primary text-white font-modern font-bold px-12 py-6 rounded-2xl transition-all flex items-center gap-4 text-lg tracking-widest hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(24,165,179,0.3)] relative z-10">
                   <DynamicIcon name={getIcon('ui_subscribe')} size={26} className="fill-white" />
-                  ASSINAR AGORA
+                  {homeSettings.heroCtaPrimaryText}
                 </div>
               </Link>
               <Link to="/free-lesson" className="glass-panel text-white font-modern font-bold px-10 py-6 rounded-2xl border-white/10 hover:bg-white/5 transition-all flex items-center gap-4 text-lg tracking-wider relative z-10 group">
                 <Play size={24} className="text-primary group-hover:scale-110 transition-transform" />
-                AULA GRÁTIS
+                {homeSettings.heroCtaSecondaryText}
               </Link>
             </div>
           </motion.div>
@@ -163,8 +193,8 @@ export default function HomePage() {
                   <span className="text-primary font-modern font-bold text-[10px] uppercase tracking-[0.3em]">CATÁLOGO COMPLETO</span>
                 </div>
                 <h2 className="font-modern text-4xl md:text-6xl lg:text-7xl font-black text-white uppercase tracking-tighter leading-[0.8] mb-4 group-hover:text-primary transition-all duration-700">
-                  Próximo <br/>
-                  <span className="text-white group-hover:text-primary">Nível</span>
+                  {homeSettings.catalogTitleLine1} <br/>
+                  <span className="text-white group-hover:text-primary">{homeSettings.catalogTitleHighlight}</span>
                 </h2>
               </div>
               
@@ -182,7 +212,7 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-[0_0_40px_rgba(0,0,0,0.5)] relative z-10 border border-white/5">
                 <iframe
-                  src="https://www.youtube.com/embed/jWPzifiJXvU?modestbranding=1&rel=0&showinfo=0&iv_load_policy=3"
+                  src={`https://www.youtube.com/embed/${homeSettings.mainVideoId}?modestbranding=1&rel=0&showinfo=0&iv_load_policy=3`}
                   className="w-full h-full border-none opacity-90 hover:opacity-100 transition-opacity"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -203,12 +233,7 @@ export default function HomePage() {
                   DIFERENCIAIS
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[
-                    "Conteúdo 100% organizado para evolução técnica e espiritual.",
-                    "Vídeo aulas em altíssima definição para não perder nenhum detalhe.",
-                    "Recomendação inteligente baseada no seu progresso musical.",
-                    "Materiais em PDF, partituras e guias práticos inclusos."
-                  ].map((item, i) => (
+                  {homeSettings.features.map((item, i) => (
                     <div key={i} className="flex gap-6 p-10 glass-panel rounded-2xl border-white/5 hover:border-primary/30 transition-all hover:bg-white/5 group">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
                         <Signal size={24} />

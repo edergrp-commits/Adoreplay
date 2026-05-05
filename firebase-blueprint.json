@@ -170,6 +170,29 @@
       },
       "required": ["userId", "status", "plan"]
     },
+    "home_settings": {
+      "title": "Home Page Settings",
+      "description": "Customizable content for the home page",
+      "type": "object",
+      "properties": {
+        "heroBadge": { "type": "string" },
+        "heroTagline": { "type": "string" },
+        "heroTitleLine1": { "type": "string" },
+        "heroTitleHighlight": { "type": "string" },
+        "heroDescription": { "type": "string" },
+        "heroVideoId": { "type": "string" },
+        "heroCtaPrimaryText": { "type": "string" },
+        "heroCtaSecondaryText": { "type": "string" },
+        "catalogTitleLine1": { "type": "string" },
+        "catalogTitleHighlight": { "type": "string" },
+        "mainVideoId": { "type": "string" },
+        "features": { 
+          "type": "array", 
+          "items": { "type": "string" } 
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "remuneration_config": {
       "title": "Remuneration Config",
       "description": "Global settings for teacher remuneration calculations",
@@ -227,6 +250,10 @@
     "settings/{settingId}": {
       "schema": "settings",
       "description": "Global settings document"
+    },
+    "settings/home": {
+      "schema": "home_settings",
+      "description": "Home page content configuration"
     },
     "library/{resourceId}": {
       "schema": "library",
