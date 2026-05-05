@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
+  LayoutDashboard,
   Lock,
   RefreshCw,
   Layout, 
@@ -140,12 +141,12 @@ interface RemunerationConfig {
   platformMargin: number;
   viewsWeight: number;
   filmmakerFactor: number;
-  pandaApiKey?: string;
-  pandaPlayerHost?: string;
-  autoSync?: boolean;
+  pandaApiKey: string;
+  pandaPlayerHost: string;
+  autoSync: boolean;
   lastSyncAt?: any;
-  syncMonth?: number;
-  syncYear?: number;
+  syncMonth: number;
+  syncYear: number;
 }
 
 interface TeacherPerformance {
@@ -241,7 +242,7 @@ export default function AdminPanel() {
   });
   const [deleteConfirm, setDeleteConfirm] = useState<{
     show: boolean;
-    type: 'course' | 'masterclass' | 'entertainment' | 'lesson' | 'library';
+    type: 'course' | 'masterclass' | 'entertainment' | 'lesson' | 'library' | 'teacher';
     id: string;
     title: string;
   }>({ show: false, type: 'course', id: '', title: '' });
@@ -264,7 +265,11 @@ export default function AdminPanel() {
     platformMargin: 70,
     viewsWeight: 30,
     filmmakerFactor: 50,
-    pandaPlayerHost: 'player-vz-c715df64-44b'
+    pandaApiKey: '',
+    pandaPlayerHost: 'player-vz-c715df64-44b',
+    autoSync: false,
+    syncMonth: new Date().getMonth() + 1,
+    syncYear: new Date().getFullYear()
   });
   const [teachersPerformance, setTeachersPerformance] = useState<TeacherPerformance[]>([]);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
@@ -773,8 +778,7 @@ export default function AdminPanel() {
       setIsCourseModalOpen(false);
       setEditingCourse(null);
     } catch (error: any) {
-      console.error("Erro ao salvar curso:", error);
-      alert(`Erro: ${error.message}`);
+      handleFirestoreError(error, editingCourse ? OperationType.UPDATE : OperationType.CREATE, editingCourse ? `courses/${editingCourse.id}` : 'courses');
     } finally {
       setIsSaving(false);
     }
@@ -806,7 +810,7 @@ export default function AdminPanel() {
       setIsCourseModalOpen(false);
       setEditingMasterclass(null);
     } catch (error: any) {
-      alert(`Erro: ${error.message}`);
+      handleFirestoreError(error, editingMasterclass ? OperationType.UPDATE : OperationType.CREATE, editingMasterclass ? `masterclasses/${editingMasterclass.id}` : 'masterclasses');
     } finally {
       setIsSaving(false);
     }
@@ -838,7 +842,7 @@ export default function AdminPanel() {
       setIsCourseModalOpen(false);
       setEditingEntertainment(null);
     } catch (error: any) {
-      alert(`Erro: ${error.message}`);
+      handleFirestoreError(error, editingEntertainment ? OperationType.UPDATE : OperationType.CREATE, editingEntertainment ? `entertainment/${editingEntertainment.id}` : 'entertainment');
     } finally {
       setIsSaving(false);
     }
@@ -946,8 +950,7 @@ export default function AdminPanel() {
       setLibraryForm({ title: '', category: 'partitura', fileUrl: '', thumbnail: '', description: '' });
       alert('Recurso salvo com sucesso!');
     } catch (error: any) {
-      console.error("Error saving library resource:", error);
-      alert(`Erro ao salvar recurso: ${error.message}`);
+      handleFirestoreError(error, editingLibrary ? OperationType.UPDATE : OperationType.CREATE, editingLibrary ? `library/${editingLibrary.id}` : 'library');
     } finally {
       setIsSaving(false);
     }
@@ -1504,7 +1507,7 @@ export default function AdminPanel() {
       }
       setIsTeacherModalOpen(false);
       setEditingTeacher(null);
-      setTeacherForm({ name: '', views: 0, minutes: 0 });
+      setTeacherForm({ name: '', views: 0, minutes: 0, videoIds: [] });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'teacher_performance');
     } finally {
@@ -1512,13 +1515,10 @@ export default function AdminPanel() {
     }
   };
 
-  const deleteTeacher = async (id: string, name: string) => {
+  const deleteTeacher = async (id: string) => {
     if (teachersPerformance.length <= 1) {
       alert('A tabela deve conter ao menos 1 professor. Não é possível remover o último registro.');
-      return;
-    }
-
-    if (!confirm(`Deseja remover ${name}? Esta ação redistribui o pool entre os professores restantes.`)) {
+      setDeleteConfirm({ ...deleteConfirm, show: false });
       return;
     }
 
@@ -1527,6 +1527,7 @@ export default function AdminPanel() {
     setDeletingId(id);
     try {
       await deleteDoc(doc(db, 'teacher_performance', id));
+      setDeleteConfirm({ ...deleteConfirm, show: false });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `teacher_performance/${id}`);
     } finally {
@@ -1768,7 +1769,7 @@ export default function AdminPanel() {
               <button 
                 onClick={() => {
                   setEditingTeacher(null);
-                  setTeacherForm({ name: '', views: 0, minutes: 0 });
+                  setTeacherForm({ name: '', views: 0, minutes: 0, videoIds: [] });
                   setIsTeacherModalOpen(true);
                 }}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-primary/20"
@@ -2339,7 +2340,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Badge de Conteúdo</label>
                         <input 
                           type="text"
-                          value={homeForm.heroBadge}
+                          value={homeForm.heroBadge || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroBadge: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2348,7 +2349,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Tagline Curta</label>
                         <input 
                           type="text"
-                          value={homeForm.heroTagline}
+                          value={homeForm.heroTagline || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroTagline: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2360,7 +2361,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Título (Linha 1)</label>
                         <input 
                           type="text"
-                          value={homeForm.heroTitleLine1}
+                          value={homeForm.heroTitleLine1 || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroTitleLine1: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2369,7 +2370,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Destaque do Título</label>
                         <input 
                           type="text"
-                          value={homeForm.heroTitleHighlight}
+                          value={homeForm.heroTitleHighlight || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroTitleHighlight: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-primary focus:border-primary outline-none transition-all"
                         />
@@ -2380,7 +2381,7 @@ export default function AdminPanel() {
                       <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Descrição Hero</label>
                       <textarea 
                         rows={3}
-                        value={homeForm.heroDescription}
+                        value={homeForm.heroDescription || ''}
                         onChange={(e) => setHomeForm({...homeForm, heroDescription: e.target.value})}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all resize-none"
                       />
@@ -2391,7 +2392,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Texto Botão Principal</label>
                         <input 
                           type="text"
-                          value={homeForm.heroCtaPrimaryText}
+                          value={homeForm.heroCtaPrimaryText || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroCtaPrimaryText: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2400,7 +2401,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Texto Botão Secundário</label>
                         <input 
                           type="text"
-                          value={homeForm.heroCtaSecondaryText}
+                          value={homeForm.heroCtaSecondaryText || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroCtaSecondaryText: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2412,7 +2413,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Info Badge 1</label>
                         <input 
                           type="text"
-                          value={homeForm.heroInfo1}
+                          value={homeForm.heroInfo1 || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroInfo1: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2421,7 +2422,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Info Badge 2</label>
                         <input 
                           type="text"
-                          value={homeForm.heroInfo2}
+                          value={homeForm.heroInfo2 || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroInfo2: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2433,7 +2434,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Vídeo de Fundo (ID ou URL)</label>
                         <input 
                           type="text"
-                          value={homeForm.heroVideoId}
+                          value={homeForm.heroVideoId || ''}
                           onChange={(e) => setHomeForm({...homeForm, heroVideoId: e.target.value})}
                           placeholder="Cole o ID ou o link completo do vídeo"
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
@@ -2445,7 +2446,7 @@ export default function AdminPanel() {
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Provedor do Vídeo</label>
                         <select 
-                          value={homeForm.heroVideoProvider}
+                          value={homeForm.heroVideoProvider || 'youtube'}
                           onChange={(e) => setHomeForm({...homeForm, heroVideoProvider: e.target.value as 'youtube' | 'panda'})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         >
@@ -2464,7 +2465,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Banner Título (Linha 1)</label>
                         <input 
                           type="text"
-                          value={homeForm.catalogTitleLine1}
+                          value={homeForm.catalogTitleLine1 || ''}
                           onChange={(e) => setHomeForm({...homeForm, catalogTitleLine1: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2473,7 +2474,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Banner Destaque</label>
                         <input 
                           type="text"
-                          value={homeForm.catalogTitleHighlight}
+                          value={homeForm.catalogTitleHighlight || ''}
                           onChange={(e) => setHomeForm({...homeForm, catalogTitleHighlight: e.target.value})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
@@ -2489,7 +2490,7 @@ export default function AdminPanel() {
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Vídeo de Demonstração (ID ou URL)</label>
                         <input 
                           type="text"
-                          value={homeForm.mainVideoId}
+                          value={homeForm.mainVideoId || ''}
                           onChange={(e) => setHomeForm({...homeForm, mainVideoId: e.target.value})}
                           placeholder="Cole o ID ou o link completo do vídeo"
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
@@ -2501,7 +2502,7 @@ export default function AdminPanel() {
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Provedor do Vídeo</label>
                         <select 
-                          value={homeForm.mainVideoProvider}
+                          value={homeForm.mainVideoProvider || 'youtube'}
                           onChange={(e) => setHomeForm({...homeForm, mainVideoProvider: e.target.value as 'youtube' | 'panda'})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         >
@@ -2518,7 +2519,7 @@ export default function AdminPanel() {
                           <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary font-black text-xs border border-primary/20">{idx + 1}</span>
                           <input 
                             type="text"
-                            value={feature}
+                            value={feature || ''}
                             onChange={(e) => {
                               const newFeatures = [...homeForm.features];
                               newFeatures[idx] = e.target.value;
@@ -2544,6 +2545,24 @@ export default function AdminPanel() {
             </div>
           ) : activeTab === 'remuneration' ? (
             <div className="lg:col-span-12 space-y-8">
+              {/* Novo link para o Painel de Remuneração Estilizado */}
+              <div className="p-8 bg-gradient-to-br from-indigo-600/20 to-blue-600/10 border border-indigo-500/20 rounded-3xl shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="space-y-2 text-center md:text-left">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Painel de Remuneração Profissional</h2>
+                    <p className="text-white/60 text-sm max-w-md">Acesse a nova interface de gestão de lucros, pesos de métricas e detalhamento por participante com o visual moderno e cálculos automáticos.</p>
+                  </div>
+                  <button 
+                    onClick={() => window.open('/admin/remuneration', '_blank')}
+                    className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-3 whitespace-nowrap"
+                  >
+                    <LayoutDashboard size={20} />
+                    ABRIR PAINEL COMPLETO
+                  </button>
+                </div>
+              </div>
+
               {/* Panda Integration Card */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="p-8 bg-surface-container-low border border-white/5 rounded-3xl shadow-2xl relative overflow-hidden group">
@@ -2682,7 +2701,7 @@ export default function AdminPanel() {
                           <input 
                             type="checkbox" 
                             className="sr-only peer" 
-                            checked={remunerationConfig.autoSync}
+                            checked={remunerationConfig.autoSync || false}
                             onChange={(e) => setRemunerationConfig({...remunerationConfig, autoSync: e.target.checked})}
                           />
                           <div className="w-14 h-7 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-[21px] after:w-[21px] after:transition-all peer-checked:bg-primary border border-white/5"></div>
@@ -2913,7 +2932,7 @@ export default function AdminPanel() {
                     <button 
                         onClick={() => {
                           setEditingTeacher(null);
-                          setTeacherForm({ name: '', views: 0, minutes: 0 });
+                          setTeacherForm({ name: '', views: 0, minutes: 0, videoIds: [] });
                           setIsTeacherModalOpen(true);
                         }}
                         className="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-primary/20"
@@ -3024,16 +3043,21 @@ export default function AdminPanel() {
                                   <button 
                                     onClick={() => {
                                       setEditingTeacher(t as TeacherPerformance);
-                                      setTeacherForm({ name: t.name || '', views: t.views ?? 0, minutes: t.minutes ?? 0 });
+                                      setTeacherForm({ 
+                                        name: t.name || '', 
+                                        views: t.views ?? 0, 
+                                        minutes: t.minutes ?? 0,
+                                        videoIds: t.videoIds || []
+                                      });
                                       setIsTeacherModalOpen(true);
                                     }}
                                     className="p-3 text-on-surface-variant hover:text-white hover:bg-white/10 rounded-2xl transition-all border border-transparent hover:border-white/5"
-                                    title="Editar métricas"
+                                    title="Editar dados"
                                   >
                                     <Edit2 size={16} />
                                   </button>
                                   <button 
-                                    onClick={() => deleteTeacher(t.id, t.name)}
+                                    onClick={() => setDeleteConfirm({ show: true, type: 'teacher', id: t.id, title: t.name })}
                                     disabled={isDeleting}
                                     className={`p-3 transition-all rounded-2xl border ${deletingId === t.id ? 'text-red-500 bg-red-500/20 border-red-500/30' : 'text-red-500/50 hover:text-red-500 hover:bg-red-500/10 border-transparent hover:border-red-500/20'}`}
                                     title="Remover"
@@ -3926,6 +3950,7 @@ export default function AdminPanel() {
                     else if (deleteConfirm.type === 'entertainment') deleteEntertainment(deleteConfirm.id);
                     else if (deleteConfirm.type === 'lesson') deleteLesson(deleteConfirm.id);
                     else if (deleteConfirm.type === 'library') handleLibraryDelete(deleteConfirm.id);
+                    else if (deleteConfirm.type === 'teacher') deleteTeacher(deleteConfirm.id);
                   }}
                   disabled={isDeleting}
                   className="py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all text-xs uppercase tracking-widest shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
@@ -4069,7 +4094,7 @@ export default function AdminPanel() {
                   <div className="flex gap-2">
                     <input 
                       type="text"
-                      value={pandaVideoIdInput}
+                      value={pandaVideoIdInput || ''}
                       onChange={(e) => setPandaVideoIdInput(e.target.value)}
                       placeholder="Cole o ID do vídeo (ex: panda-video-id)"
                       className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:border-primary outline-none transition-all"

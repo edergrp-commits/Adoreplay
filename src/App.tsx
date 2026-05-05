@@ -11,6 +11,7 @@ import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPanel from './pages/AdminPanel';
+import RemunerationDashboard from './pages/RemunerationDashboard';
 import CheckoutPage from './pages/CheckoutPage';
 import MasterclassDetailPage from './pages/MasterclassDetailPage';
 import EntertainmentDetailPage from './pages/EntertainmentDetailPage';
@@ -63,6 +64,7 @@ function AppContent() {
             <Route path="/success" element={<SuccessPage />} />
             <Route path="/cancel" element={<CancelPage />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin/remuneration" element={<RemunerationDashboard />} />
             {/* Fallback to Masterclass for demo purposes */}
             <Route path="*" element={<MasterclassPage />} />
           </Routes>
