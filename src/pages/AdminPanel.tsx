@@ -223,11 +223,15 @@ export default function AdminPanel() {
     heroTitleHighlight: 'o Teclado',
     heroDescription: 'A revolução do aprendizado musical para cristãos. Masterclasses exclusivas com os principais produtores e músicos do cenário nacional.',
     heroVideoId: 'OVrGAQ4qrt0',
+    heroVideoProvider: 'youtube' as 'youtube' | 'panda',
     heroCtaPrimaryText: 'ASSINAR AGORA',
     heroCtaSecondaryText: 'AULA GRÁTIS',
+    heroInfo1: 'Áudio High-Fidelity',
+    heroInfo2: 'Qualidade 4K Ultra HD',
     catalogTitleLine1: 'Próximo',
     catalogTitleHighlight: 'Nível',
     mainVideoId: 'jWPzifiJXvU',
+    mainVideoProvider: 'youtube' as 'youtube' | 'panda',
     features: [
       "Conteúdo 100% organizado para evolução técnica e espiritual.",
       "Vídeo aulas em altíssima definição para não perder nenhum detalhe.",
@@ -2384,14 +2388,70 @@ export default function AdminPanel() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">YouTube Video ID (Fundo)</label>
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Texto Botão Principal</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroCtaPrimaryText}
+                          onChange={(e) => setHomeForm({...homeForm, heroCtaPrimaryText: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Texto Botão Secundário</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroCtaSecondaryText}
+                          onChange={(e) => setHomeForm({...homeForm, heroCtaSecondaryText: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Info Badge 1</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroInfo1}
+                          onChange={(e) => setHomeForm({...homeForm, heroInfo1: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Info Badge 2</label>
+                        <input 
+                          type="text"
+                          value={homeForm.heroInfo2}
+                          onChange={(e) => setHomeForm({...homeForm, heroInfo2: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Vídeo de Fundo (ID ou URL)</label>
                         <input 
                           type="text"
                           value={homeForm.heroVideoId}
                           onChange={(e) => setHomeForm({...homeForm, heroVideoId: e.target.value})}
-                          placeholder="EX: OVrGAQ4qrt0"
+                          placeholder="Cole o ID ou o link completo do vídeo"
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
                         />
+                        <p className="text-[9px] text-white/30 italic px-1">
+                          Funciona com link completo: youtube.com/watch?v=... ou link do player do Panda.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Provedor do Vídeo</label>
+                        <select 
+                          value={homeForm.heroVideoProvider}
+                          onChange={(e) => setHomeForm({...homeForm, heroVideoProvider: e.target.value as 'youtube' | 'panda'})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        >
+                          <option value="youtube">YouTube</option>
+                          <option value="panda">Panda Video</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -2424,15 +2484,31 @@ export default function AdminPanel() {
                   {/* Video & Features */}
                   <div className="space-y-6 pt-6 border-t border-white/5">
                     <h3 className="text-sm font-black text-primary uppercase tracking-[0.2em] border-l-2 border-primary pl-4">Vídeo de Demonstração e Diferenciais</h3>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">YouTube Video ID (Demonstração)</label>
-                      <input 
-                        type="text"
-                        value={homeForm.mainVideoId}
-                        onChange={(e) => setHomeForm({...homeForm, mainVideoId: e.target.value})}
-                        placeholder="EX: jWPzifiJXvU"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Vídeo de Demonstração (ID ou URL)</label>
+                        <input 
+                          type="text"
+                          value={homeForm.mainVideoId}
+                          onChange={(e) => setHomeForm({...homeForm, mainVideoId: e.target.value})}
+                          placeholder="Cole o ID ou o link completo do vídeo"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        />
+                        <p className="text-[9px] text-white/30 italic px-1">
+                          Dica: Cole o link do navegador e o sistema cuidará do início automático.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-white/40 uppercase tracking-widest ml-1">Provedor do Vídeo</label>
+                        <select 
+                          value={homeForm.mainVideoProvider}
+                          onChange={(e) => setHomeForm({...homeForm, mainVideoProvider: e.target.value as 'youtube' | 'panda'})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-primary outline-none transition-all"
+                        >
+                          <option value="youtube">YouTube</option>
+                          <option value="panda">Panda Video</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="space-y-4">

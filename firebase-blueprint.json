@@ -181,11 +181,15 @@
         "heroTitleHighlight": { "type": "string" },
         "heroDescription": { "type": "string" },
         "heroVideoId": { "type": "string" },
+        "heroVideoProvider": { "type": "string", "enum": ["youtube", "panda"] },
         "heroCtaPrimaryText": { "type": "string" },
         "heroCtaSecondaryText": { "type": "string" },
+        "heroInfo1": { "type": "string" },
+        "heroInfo2": { "type": "string" },
         "catalogTitleLine1": { "type": "string" },
         "catalogTitleHighlight": { "type": "string" },
         "mainVideoId": { "type": "string" },
+        "mainVideoProvider": { "type": "string", "enum": ["youtube", "panda"] },
         "features": { 
           "type": "array", 
           "items": { "type": "string" } 

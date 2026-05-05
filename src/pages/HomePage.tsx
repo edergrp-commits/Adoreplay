@@ -51,11 +51,15 @@ export default function HomePage() {
     heroTitleHighlight: 'o Teclado',
     heroDescription: 'A revolução do aprendizado musical para cristãos. Masterclasses exclusivas com os principais produtores e músicos do cenário nacional.',
     heroVideoId: 'OVrGAQ4qrt0',
+    heroVideoProvider: 'youtube' as 'youtube' | 'panda',
     heroCtaPrimaryText: 'ASSINAR AGORA',
     heroCtaSecondaryText: 'AULA GRÁTIS',
+    heroInfo1: 'Áudio High-Fidelity',
+    heroInfo2: 'Qualidade 4K Ultra HD',
     catalogTitleLine1: 'Próximo',
     catalogTitleHighlight: 'Nível',
     mainVideoId: 'jWPzifiJXvU',
+    mainVideoProvider: 'youtube' as 'youtube' | 'panda',
     features: [
       "Conteúdo 100% organizado para evolução técnica e espiritual.",
       "Vídeo aulas em altíssima definição para não perder nenhum detalhe.",
@@ -64,10 +68,55 @@ export default function HomePage() {
     ]
   });
 
+  const getYouTubeVideoId = (url: string) => {
+    if (!url) return '';
+    const trimmed = url.trim();
+    if (trimmed.length === 11) return trimmed;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = trimmed.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : trimmed;
+  };
+
+  const getPandaEmbedUrl = (videoId: string, isMuted: boolean = true) => {
+    if (!videoId) return '';
+    const trimmed = videoId.trim();
+    
+    // Extrai o ID se for um link do Panda
+    let id = trimmed;
+    if (trimmed.includes('v=')) {
+      id = trimmed.split('v=')[1].split('&')[0];
+    } else if (trimmed.includes('pandavideo.com.br/')) {
+      const parts = trimmed.split('/');
+      id = parts[parts.length - 1].split('?')[0];
+    }
+
+    // Se o usuário colou o link de embed direto, apenas garante os parâmetros de autoplay e mute
+    if (trimmed.includes('pandavideo.com.br/embed')) {
+      const baseUrl = trimmed.split('?')[0];
+      return `${baseUrl}?v=${id}&autoplay=1&muted=${isMuted ? 1 : 0}`;
+    }
+    
+    // Tenta identificar o host (subdomínio) se o link completo foi colado
+    let host = 'player-vz-9426fcd5-397.tv.pandavideo.com.br';
+    if (trimmed.includes('.tv.pandavideo.com.br')) {
+      const match = trimmed.match(/https?:\/\/([^/]+)/);
+      if (match) host = match[1];
+    }
+    
+    return `https://${host}/embed/?v=${id}&autoplay=1&muted=${isMuted ? 1 : 0}`;
+  };
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'home'), (docSnap) => {
       if (docSnap.exists()) {
-        setHomeSettings(prev => ({ ...prev, ...docSnap.data() }));
+        const newData = docSnap.data();
+        setHomeSettings(prev => {
+          // Prevent unnecessary re-renders if data is identical
+          if (JSON.stringify(prev) === JSON.stringify({ ...prev, ...newData })) {
+            return prev;
+          }
+          return { ...prev, ...newData };
+        });
       }
     });
     return () => unsub();
@@ -81,12 +130,22 @@ export default function HomePage() {
       {/* Cinematic Hero Header with Video Background */}
       <section className="relative min-h-[85vh] lg:min-h-screen w-full overflow-hidden bg-black border-b border-primary/20 flex flex-col">
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <iframe
-            src={`https://www.youtube.com/embed/${homeSettings.heroVideoId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${homeSettings.heroVideoId}&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
-            className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
-            allow="autoplay; encrypted-media"
-            title="Background Video"
-          ></iframe>
+          {homeSettings.heroVideoProvider === 'youtube' ? (
+            <iframe
+              src={`https://www.youtube.com/embed/${getYouTubeVideoId(homeSettings.heroVideoId)}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${getYouTubeVideoId(homeSettings.heroVideoId)}&showinfo=0&modestbranding=1&rel=0&enablejsapi=1&iv_load_policy=3`}
+              className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
+              allow="autoplay; encrypted-media"
+              title="Background Video"
+            ></iframe>
+          ) : (
+            <iframe
+              src={getPandaEmbedUrl(homeSettings.heroVideoId, isMuted)}
+              className="absolute top-[50%] left-1/2 w-full h-full min-w-[177.77vh] min-h-[56.25vw] -translate-x-1/2 -translate-y-1/2 pointer-events-none border-none scale-[1.1] grayscale-[0.2] contrast-[1.1]"
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              title="Background Video"
+            ></iframe>
+          )}
         </div>
         
         {/* Futuristic Overlays */}
@@ -135,11 +194,11 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center gap-10 text-on-surface-variant font-modern text-[9px] font-semibold uppercase tracking-[0.2em]">
               <div className="flex items-center gap-3 group cursor-help">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
-                <span className="group-hover:text-primary transition-colors">Áudio High-Fidelity</span>
+                <span className="group-hover:text-primary transition-colors">{homeSettings.heroInfo1}</span>
               </div>
               <div className="flex items-center gap-3 group cursor-help">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/40"></div>
-                <span className="group-hover:text-primary transition-colors">Qualidade 4K Ultra HD</span>
+                <span className="group-hover:text-primary transition-colors">{homeSettings.heroInfo2}</span>
               </div>
             </div>
             
@@ -211,13 +270,23 @@ export default function HomePage() {
             <div className="relative p-1 bg-white/5 rounded-2xl group overflow-hidden">
               <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="aspect-video w-full rounded-xl overflow-hidden bg-black shadow-[0_0_40px_rgba(0,0,0,0.5)] relative z-10 border border-white/5">
-                <iframe
-                  src={`https://www.youtube.com/embed/${homeSettings.mainVideoId}?modestbranding=1&rel=0&showinfo=0&iv_load_policy=3`}
-                  className="w-full h-full border-none opacity-90 hover:opacity-100 transition-opacity"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title="Course Preview"
-                ></iframe>
+                {homeSettings.mainVideoProvider === 'youtube' ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${getYouTubeVideoId(homeSettings.mainVideoId)}?autoplay=1&mute=1&playlist=${getYouTubeVideoId(homeSettings.mainVideoId)}&loop=1&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3`}
+                    className="w-full h-full border-none opacity-90 hover:opacity-100 transition-opacity"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Course Preview"
+                  ></iframe>
+                ) : (
+                  <iframe
+                    src={getPandaEmbedUrl(homeSettings.mainVideoId, true)}
+                    className="w-full h-full border-none opacity-90 hover:opacity-100 transition-opacity"
+                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    title="Course Preview"
+                  ></iframe>
+                )}
               </div>
               <div className="absolute top-4 left-4 z-20 pointer-events-none">
                 <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded border border-primary/30 text-[9px] font-mono text-primary uppercase tracking-widest">
