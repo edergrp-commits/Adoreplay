@@ -224,22 +224,24 @@ export default function Header() {
   }, [isSearchOpen]);
 
   return (
-    <nav className="fixed top-0 w-full z-[100] bg-background/80 backdrop-blur-xl flex justify-between items-center px-8 h-20 border-b border-white/5">
+    <nav className="fixed top-0 w-full z-[100] bg-background/60 backdrop-blur-2xl flex justify-between items-center px-8 h-20 border-b border-primary/20 shadow-[0_4px_30px_rgba(24,165,179,0.1)]">
       <div className="flex items-center gap-12">
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all shadow-2xl">
+        <Link to="/" className="flex items-center gap-3 group relative">
+          <div className="absolute -inset-1 bg-primary/20 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity animate-pulse"></div>
+          <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center border border-white/10 group-hover:border-primary/50 transition-all shadow-2xl relative z-10 overflow-hidden">
+            <div className="scanline"></div>
             <img src="/favicon.svg" alt="AdorePlay" className="w-6 h-6 object-contain shadow-primary/20" />
           </div>
-          <span className="text-2xl font-black tracking-tighter text-primary font-brand uppercase hover:opacity-80 transition-opacity">
-            AdorePlay
+          <span className="text-2xl font-black tracking-tighter text-white font-modern uppercase group-hover:text-primary transition-colors relative z-10">
+            Adore<span className="text-primary group-hover:text-white">Play</span>
           </span>
         </Link>
         <div className="hidden md:flex gap-8 items-center">
           <Link
             to="/"
-            className={`font-headline font-bold text-sm tracking-wide transition-colors ${
+            className={`font-modern font-semibold text-xs tracking-wider transition-all hover:neon-text ${
               location.pathname === '/' 
-                ? 'text-white border-b-2 border-primary pb-1' 
+                ? 'text-primary' 
                 : 'text-on-surface-variant hover:text-white'
             }`}
           >
@@ -248,9 +250,9 @@ export default function Header() {
 
           <Link
             to="/library"
-            className={`font-headline font-bold text-sm tracking-wide transition-colors ${
+            className={`font-modern font-semibold text-xs tracking-wider transition-all hover:neon-text ${
               location.pathname === '/library' 
-                ? 'text-white border-b-2 border-primary pb-1' 
+                ? 'text-primary' 
                 : 'text-on-surface-variant hover:text-white'
             }`}
           >
@@ -264,9 +266,9 @@ export default function Header() {
             onMouseLeave={() => setIsCoursesOpen(false)}
           >
             <button
-              className={`flex items-center gap-1 font-headline font-bold text-sm tracking-wide transition-colors ${
+              className={`flex items-center gap-1 font-modern font-semibold text-xs tracking-wider transition-all hover:neon-text ${
                 location.pathname.startsWith('/courses')
-                  ? 'text-white border-b-2 border-primary pb-1' 
+                  ? 'text-primary' 
                   : 'text-on-surface-variant hover:text-white'
               }`}
             >
@@ -320,9 +322,9 @@ export default function Header() {
             onMouseLeave={() => setIsMasterclassOpen(false)}
           >
             <button
-              className={`flex items-center gap-1 font-headline font-bold text-sm tracking-wide transition-colors ${
+              className={`flex items-center gap-1 font-modern font-semibold text-xs tracking-wider transition-all hover:neon-text ${
                 location.pathname === '/masterclass'
-                  ? 'text-white border-b-2 border-primary pb-1' 
+                  ? 'text-primary' 
                   : 'text-on-surface-variant hover:text-white'
               }`}
             >
@@ -376,9 +378,9 @@ export default function Header() {
             onMouseLeave={() => setIsEntertainmentOpen(false)}
           >
             <button
-              className={`flex items-center gap-1 font-headline font-bold text-sm tracking-wide transition-colors ${
+              className={`flex items-center gap-1 font-modern font-semibold text-xs tracking-wider transition-all hover:neon-text ${
                 location.pathname === '/entertainment'
-                  ? 'text-white border-b-2 border-primary pb-1' 
+                  ? 'text-primary' 
                   : 'text-on-surface-variant hover:text-white'
               }`}
             >
@@ -439,17 +441,18 @@ export default function Header() {
                 className="absolute right-0 flex items-center"
               >
                 <div className="relative w-full">
+                  <div className="absolute inset-0 bg-primary/5 blur-md rounded-full"></div>
                   <input
                     ref={searchInputRef}
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="O que você quer aprender hoje?"
-                    className="w-full bg-surface-container-high border border-white/10 rounded-full py-2.5 pl-10 pr-16 text-sm text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/50 shadow-2xl"
+                    placeholder="O que você quer aprender?"
+                    className="w-full bg-black/40 border border-primary/20 rounded-full py-2.5 pl-10 pr-16 text-xs text-white neon-shadow font-body focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-primary/30 relative z-10 backdrop-blur-md"
                   />
-                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-                  <div className="absolute right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] font-black text-on-surface-variant/50 uppercase tracking-widest pointer-events-none">
-                    <span>/</span>
+                  <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary z-20" />
+                  <div className="absolute right-10 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded border border-primary/20 bg-primary/10 text-[9px] font-modern font-bold text-primary/50 uppercase tracking-widest pointer-events-none z-20">
+                    <span>BUSCAR</span>
                   </div>
                   <button 
                     onClick={() => {

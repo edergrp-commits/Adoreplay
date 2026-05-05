@@ -57,74 +57,74 @@ export default function Footer() {
 
           {/* Content Column */}
           <div className="space-y-6">
-            <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">Conteúdo</h4>
+            <h4 className="text-[10px] font-modern font-black text-primary uppercase tracking-[0.2em] mb-8">Conteúdo</h4>
             <ul className="space-y-4">
               <li>
-                <Link to="/" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Início</Link>
+                <Link to="/" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Início</Link>
               </li>
               <li>
-                <Link to="/library" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Biblioteca</Link>
+                <Link to="/library" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Biblioteca</Link>
               </li>
               <li>
-                <Link to="/courses" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Cursos</Link>
+                <Link to="/courses" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Cursos</Link>
               </li>
               <li>
-                <Link to="/masterclass" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Masterclasses</Link>
+                <Link to="/masterclass" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Masterclasses</Link>
               </li>
               <li>
-                <Link to="/entertainment" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Entretenimento</Link>
+                <Link to="/entertainment" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Entretenimento</Link>
               </li>
             </ul>
           </div>
 
           {/* Institutional Column */}
           <div className="space-y-6">
-            <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">Institucional</h4>
+            <h4 className="text-[10px] font-modern font-black text-primary uppercase tracking-[0.2em] mb-8">Institucional</h4>
             <ul className="space-y-4">
               <li>
-                <Link to="#" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Sobre a AdorePlay</Link>
+                <Link to="#" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Sobre a AdorePlay</Link>
               </li>
               <li>
-                <Link to="#" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Termos de Uso</Link>
+                <Link to="#" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Termos de Uso</Link>
               </li>
               <li>
-                <Link to="#" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Privacidade</Link>
+                <Link to="#" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Privacidade</Link>
               </li>
               <li>
-                <Link to="#" className="text-sm text-on-surface-variant hover:text-primary transition-colors">Ajuda & Suporte</Link>
+                <Link to="#" className="text-sm font-modern text-on-surface-variant hover:text-primary transition-all">Ajuda & Suporte</Link>
               </li>
             </ul>
           </div>
 
           {/* Contact Column */}
           <div className="space-y-6">
-            <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">Contato</h4>
+            <h4 className="text-[10px] font-modern font-black text-primary uppercase tracking-[0.2em] mb-8">Contato</h4>
             <ul className="space-y-4">
-              <li className="flex items-start gap-3 group">
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <Mail size={14} />
+              <li className="flex items-start gap-4 group">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                  <Mail size={16} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">E-mail</span>
-                  <a href={`mailto:${footerData.email}`} className="text-sm text-on-surface-variant hover:text-white transition-colors">{footerData.email}</a>
+                  <span className="text-[10px] font-modern font-bold text-white/30 uppercase tracking-[0.1em]">E-MAIL</span>
+                  <a href={`mailto:${footerData.email}`} className="text-sm font-modern text-on-surface-variant hover:text-white transition-colors">{footerData.email}</a>
                 </div>
               </li>
-              <li className="flex items-start gap-3 group">
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <Phone size={14} />
+              <li className="flex items-start gap-4 group">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                  <Phone size={16} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Telefone</span>
-                  <a href={`tel:${footerData.phone.replace(/\D/g, '')}`} className="text-sm text-on-surface-variant hover:text-white transition-colors">{footerData.phone}</a>
+                  <span className="text-[10px] font-modern font-bold text-white/30 uppercase tracking-[0.1em]">TELEFONE</span>
+                  <a href={`tel:${footerData.phone.replace(/\D/g, '')}`} className="text-sm font-modern text-on-surface-variant hover:text-white transition-colors">{footerData.phone}</a>
                 </div>
               </li>
-              <li className="flex items-start gap-3 group">
-                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <MapPin size={14} />
+              <li className="flex items-start gap-4 group">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                  <MapPin size={16} />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Localização</span>
-                  <span className="text-sm text-on-surface-variant">{footerData.location}</span>
+                  <span className="text-[10px] font-modern font-bold text-white/30 uppercase tracking-[0.1em]">LOCALIZAÇÃO</span>
+                  <span className="text-sm font-modern text-on-surface-variant">{footerData.location}</span>
                 </div>
               </li>
             </ul>
@@ -133,8 +133,8 @@ export default function Footer() {
 
         {/* Bottom Bar */}
         <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">
-            © {currentYear} ADOREPLAY. TODOS OS DIREITOS RESERVADOS.
+          <p className="text-[10px] font-modern font-semibold text-on-surface-variant/40 tracking-[0.2em] uppercase">
+            © {currentYear} ADOREPLAY. Todos os direitos reservados.
           </p>
           <div className="flex items-center gap-6">
             <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" alt="Visa" className="h-4 opacity-30 grayscale hover:opacity-100 hover:grayscale-0 transition-all cursor-help" />
