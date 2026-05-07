@@ -29,8 +29,16 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorCode = (error as any)?.code;
+
+  if (errorCode === 'resource-exhausted') {
+    console.warn(`[Firestore Quota Exceeded] Operation: ${operationType} on path: ${path}. This is expected if the free daily limit was reached.`);
+    return; // Don't throw if it's just a quota issue
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,

@@ -63,7 +63,15 @@ export default function Header() {
       }
     });
 
-    // Content listeners - only for authenticated users to avoid permission blips
+    // Content listeners - Using a try-catch pattern and potentially one-time fetches to save quota
+    const errorHandler = (collectionName: string) => (error: any) => {
+      if (error.code === 'resource-exhausted') {
+        console.warn(`Firestore Quota exceeded for ${collectionName}. Using empty local state.`);
+        return;
+      }
+      console.error(`Error in Header ${collectionName} listener:`, error);
+    };
+
     const unsubCourses = onSnapshot(collection(db, 'courses'), (snapshot) => {
       setDbCourses(snapshot.docs.map(doc => ({ 
         id: doc.id, 
@@ -72,9 +80,7 @@ export default function Header() {
         icon: getIcon(doc.data().category?.toLowerCase() || 'teclas'), 
         type: 'Curso' 
       })));
-    }, (error) => {
-      console.error("Error in Header courses listener:", error);
-    });
+    }, errorHandler('courses'));
 
     const unsubMasterclasses = onSnapshot(collection(db, 'masterclasses'), (snapshot) => {
       setDbMasterclasses(snapshot.docs.map(doc => ({ 
@@ -84,9 +90,7 @@ export default function Header() {
         icon: getIcon('ui_masterclass'), 
         type: 'Masterclass' 
       })));
-    }, (error) => {
-      console.error("Error in Header masterclasses listener:", error);
-    });
+    }, errorHandler('masterclasses'));
 
     const unsubEntertainment = onSnapshot(collection(db, 'entertainment'), (snapshot) => {
       setDbEntertainment(snapshot.docs.map(doc => ({ 
@@ -96,9 +100,7 @@ export default function Header() {
         icon: getIcon('ui_entertainment'), 
         type: 'Entretenimento' 
       })));
-    }, (error) => {
-      console.error("Error in Header entertainment listener:", error);
-    });
+    }, errorHandler('entertainment'));
 
     const unsubLessons = onSnapshot(collection(db, 'lessons'), (snapshot) => {
       setDbLessons(snapshot.docs.map(doc => ({ 
@@ -108,9 +110,7 @@ export default function Header() {
         icon: PlayCircle, 
         type: 'Aula' 
       })));
-    }, (error) => {
-      console.error("Error in Header lessons listener:", error);
-    });
+    }, errorHandler('lessons'));
 
     const unsubNotifications = onSnapshot(
       query(
@@ -122,6 +122,10 @@ export default function Header() {
         setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       },
       (error) => {
+        if (error.code === 'resource-exhausted') {
+          console.warn("Firestore Quota exceeded for notifications.");
+          return;
+        }
         if (!error.message.includes('insufficient permissions')) {
           handleFirestoreError(error, OperationType.GET, 'notifications');
         }
@@ -137,6 +141,10 @@ export default function Header() {
         type: 'Biblioteca' 
       })));
     }, (error) => {
+      if (error.code === 'resource-exhausted') {
+        console.warn("Firestore Quota exceeded for library.");
+        return;
+      }
       if (!error.message.includes('insufficient permissions')) {
         handleFirestoreError(error, OperationType.GET, 'library');
       }

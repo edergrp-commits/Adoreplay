@@ -43,6 +43,7 @@ function AccessItem({ item, index }: { item: { title: string, description: strin
 export default function HomePage() {
   const { getIcon } = useIconSettings();
   const [isMuted, setIsMuted] = useState(true);
+  const [isReduced, setIsReduced] = useState(false);
   const navigate = useNavigate();
   const [homeSettings, setHomeSettings] = useState({
     heroBadge: 'CONTEÚDO PREMIUM',
@@ -122,6 +123,11 @@ export default function HomePage() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReduced(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="min-h-screen relative glitch-static">
       <div className="fixed inset-0 cyber-grid-bg opacity-20 pointer-events-none"></div>
@@ -157,8 +163,17 @@ export default function HomePage() {
         <div className="relative flex-1 container mx-auto px-8 md:px-16 flex flex-col justify-center pt-24 md:pt-32 pb-24 md:pb-32 z-30">
           <motion.div 
             initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+            animate={{ 
+              opacity: 1, 
+              x: 0,
+              scale: isReduced ? 0.85 : 1
+            }}
+            transition={{ 
+              duration: 1, 
+              ease: [0.16, 1, 0.3, 1],
+              scale: { duration: 2, ease: "easeInOut" }
+            }}
+            style={{ transformOrigin: 'left center' }}
             className="max-w-4xl space-y-6 md:space-y-8"
           >
             <div className="flex items-center gap-6">

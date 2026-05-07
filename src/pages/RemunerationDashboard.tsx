@@ -148,6 +148,12 @@ export default function RemunerationDashboard() {
     const unsubParticipants = onSnapshot(query(collection(db, 'teacher_performance'), orderBy('views', 'desc')), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Participant));
       setTeachersPerformance(data);
+    }, (error) => {
+      if (error.code === 'resource-exhausted') {
+        console.warn("Firestore Quota exceeded in RemunerationDashboard participants listener.");
+        return;
+      }
+      console.error("Error in participants listener:", error);
     });
 
     return () => {
@@ -184,30 +190,13 @@ export default function RemunerationDashboard() {
 
     try {
       if (editingParticipant) {
-        if (editingParticipant.id === 'filmmaker-id') {
-          // Special case for filmmaker: update both the factor in config and its override in performance if changed
-          await updateDoc(doc(db, 'remuneration_config', 'current'), {
-            filmmakerFactor: config.filmmakerFactor,
-            updatedAt: serverTimestamp()
-          });
-          
-          await setDoc(doc(db, 'teacher_performance', 'filmmaker-id'), {
-            name: participantForm.name,
-            views: participantForm.views,
-            minutes: participantForm.minutes,
-            videoIds: videoIdsArray,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-
-        } else {
-          await updateDoc(doc(db, 'teacher_performance', editingParticipant.id), {
-            name: participantForm.name,
-            views: participantForm.views,
-            minutes: participantForm.minutes,
-            videoIds: videoIdsArray,
-            updatedAt: serverTimestamp()
-          });
-        }
+        await updateDoc(doc(db, 'teacher_performance', editingParticipant.id), {
+          name: participantForm.name,
+          views: participantForm.views,
+          minutes: participantForm.minutes,
+          videoIds: videoIdsArray,
+          updatedAt: serverTimestamp()
+        });
       } else {
         await addDoc(collection(db, 'teacher_performance'), {
           name: participantForm.name,
@@ -245,50 +234,32 @@ export default function RemunerationDashboard() {
 
   // Cálculos de Remuneração (Idênticos ao AdminPanel)
   const totalRevenue = config.subscriptionValue * config.activeStudents;
-  const poolPercentage = 100 - config.platformMargin;
-  const availablePool = totalRevenue * (poolPercentage / 100);
+  
+  // New split requested by user: 30% Professors, 30% Costs, 40% Margin
+  const professoresValue = totalRevenue * 0.30;
+  const custosValue = totalRevenue * 0.30;
+  const margemValue = totalRevenue * 0.40;
+
+  const availablePool = professoresValue;
   const watchTimeWeight = 100 - config.viewsWeight;
 
-  const realTeachers = teachersPerformance.filter(t => t.id !== 'filmmaker-id');
-  const filmmakerRecord = teachersPerformance.find(t => t.id === 'filmmaker-id');
+  const totalTeacherViews = teachersPerformance.reduce((acc, t) => acc + (t.views || 0), 0);
+  const totalTeacherMinutes = teachersPerformance.reduce((acc, t) => acc + (t.minutes || 0), 0);
 
-  const totalTeacherViews = realTeachers.reduce((acc, t) => acc + (t.views || 0), 0);
-  const totalTeacherMinutes = realTeachers.reduce((acc, t) => acc + (t.minutes || 0), 0);
-
-  // Filmmaker metrics: use manual override if exists, else automatic sum
-  const fViews = filmmakerRecord?.views ?? totalTeacherViews;
-  const fMinutes = filmmakerRecord?.minutes ?? totalTeacherMinutes;
-  
-  const fScoreBase = (fViews * (config.viewsWeight / 100)) + (fMinutes * (watchTimeWeight / 100));
-  const filmmakerScore = fScoreBase * (config.filmmakerFactor / 100);
-
-  const teachersWithScores = realTeachers.map(t => {
+  const teachersWithScores = teachersPerformance.map(t => {
     const score = ((t.views || 0) * (config.viewsWeight / 100)) + ((t.minutes || 0) * (watchTimeWeight / 100));
-    return { ...t, score, isFilmmaker: false };
+    return { ...t, score };
   });
 
-  const teachersAndFilmmaker = [
-    ...teachersWithScores,
-    {
-      id: 'filmmaker-id',
-      name: filmmakerRecord?.name || 'Equipe de Professores',
-      views: fViews,
-      minutes: fMinutes,
-      score: filmmakerScore,
-      isFilmmaker: true,
-      videoIds: filmmakerRecord?.videoIds || []
-    }
-  ];
+  const totalScore = teachersWithScores.reduce((acc, t) => acc + t.score, 0);
 
-  const totalScore = teachersAndFilmmaker.reduce((acc, t) => acc + t.score, 0);
-
-  const rankedTeachers = teachersAndFilmmaker.map((t, index) => {
-    const share = totalScore > 0 ? (t.score / totalScore) : (teachersAndFilmmaker.length > 0 ? 1 / teachersAndFilmmaker.length : 0);
+  const rankedTeachers = teachersWithScores.map((t, index) => {
+    const share = totalScore > 0 ? (t.score / totalScore) : (teachersWithScores.length > 0 ? 1 / teachersWithScores.length : 0);
     const remuneration = share * availablePool;
     
     // Cores baseadas no índice
     const colors = ['#3B82F6', '#F97316', '#10B981', '#8B5CF6', '#EC4899', '#EAB308', '#06B6D4'];
-    const pColor = t.isFilmmaker ? '#4F46E5' : colors[index % colors.length];
+    const pColor = colors[index % colors.length];
 
     return { 
       ...t, 
@@ -377,7 +348,7 @@ export default function RemunerationDashboard() {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ticket Médio (R$)</label>
                 <div className="flex items-center border border-gray-200 rounded-xl px-4 py-3 bg-gray-50/50 focus-within:bg-white focus-within:border-blue-500 transition-all">
@@ -403,18 +374,6 @@ export default function RemunerationDashboard() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custo Operacional (%)</label>
-                <div className="flex items-center border border-gray-200 rounded-xl px-4 py-3 bg-gray-50/50 focus-within:bg-white focus-within:border-blue-500 transition-all">
-                  <input 
-                    type="number" 
-                    value={config.platformMargin}
-                    onChange={(e) => setConfig({...config, platformMargin: Number(e.target.value)})}
-                    className="w-full outline-none text-gray-900 font-black text-center"
-                  />
-                  <span className="text-gray-400 ml-2 text-sm">%</span>
-                </div>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -423,16 +382,16 @@ export default function RemunerationDashboard() {
                 <span className="text-xl font-black text-gray-900 font-mono">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 group hover:border-blue-300 transition-all">
-                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-2">Professores ({100 - config.platformMargin}%)</span>
-                <span className="text-xl font-black text-blue-600 font-mono">R$ {availablePool.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-2">Professores (30%)</span>
+                <span className="text-xl font-black text-blue-600 font-mono">R$ {professoresValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Plataforma ({config.platformMargin}%)</span>
-                <span className="text-xl font-black text-gray-900">R$ {(totalRevenue - availablePool).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Custos (30%)</span>
+                <span className="text-xl font-black text-gray-900 font-mono">R$ {custosValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Gateway</span>
-                <span className="text-xl font-black text-gray-900">{config.filmmakerFactor}%</span>
+              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-blue-200 transition-all">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Margem (40%)</span>
+                <span className="text-xl font-black text-gray-900 font-mono">R$ {margemValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
@@ -617,19 +576,13 @@ export default function RemunerationDashboard() {
                         >
                           <Edit2 size={16} />
                         </button>
-                        {!t.isFilmmaker ? (
-                          <button 
-                            onClick={() => setDeleteConfirm({ show: true, id: t.id, name: t.name || '' })}
-                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            title="Excluir Professor"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        ) : (
-                          <div className="p-2 bg-indigo-50 text-indigo-400 rounded-lg cursor-help underline decoration-dotted" title="Este é um participante corporativo. Você pode editá-lo mas não excluí-lo diretamente.">
-                            <Lock size={16} />
-                          </div>
-                        )}
+                        <button 
+                          onClick={() => setDeleteConfirm({ show: true, id: t.id, name: t.name || '' })}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Excluir Professor"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -667,38 +620,15 @@ export default function RemunerationDashboard() {
               </div>
 
               <form onSubmit={handleParticipantSubmit} className="p-8 space-y-6">
-                {editingParticipant?.isFilmmaker && (
-                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Info size={16} className="text-indigo-600" />
-                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Configuração de Gateway</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="200" 
-                        value={config.filmmakerFactor}
-                        onChange={(e) => setConfig({...config, filmmakerFactor: Number(e.target.value)})}
-                        className="flex-1 h-1.5 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                      />
-                      <span className="text-lg font-black text-indigo-600 font-mono w-14 text-right">{config.filmmakerFactor}%</span>
-                    </div>
-                    <p className="text-[9px] text-indigo-400 font-bold leading-tight">
-                      Este percentual define a retenção ou ajuste de Gateway sobre o score gerado no ciclo.
-                    </p>
-                  </div>
-                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identificação do Expert</label>
                   <input 
-                    type="text"
+                    type="text" 
                     required
-                    disabled={editingParticipant?.isFilmmaker}
                     value={participantForm.name}
                     onChange={(e) => setParticipantForm({...participantForm, name: e.target.value})}
                     placeholder="Nome do Professor"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-gray-900 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold disabled:opacity-50"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 text-gray-900 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold"
                   />
                 </div>
 
